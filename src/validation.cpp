@@ -18,6 +18,7 @@
 #include <flatfile.h>
 #include <hash.h>
 #include <index/txindex.h>
+#include <key_io.h>
 #include <policy/fees.h>
 #include <policy/policy.h>
 #include <policy/settings.h>
@@ -1006,14 +1007,8 @@ bool ReadRawBlockFromDisk(std::vector<uint8_t>& block, const CBlockIndex* pindex
 
 CAmount GetBlockSubsidy(int nHeight, const Consensus::Params& consensusParams)
 {
-    int halvings = nHeight / consensusParams.nSubsidyHalvingInterval;
+    CAmount nSubsidy = 5 * COIN;
     // Force block reward to zero when right shift is undefined.
-    if (halvings >= 64)
-        return 0;
-
-    CAmount nSubsidy = 50 * COIN;
-    // Subsidy is cut in half every 210,000 blocks which will occur approximately every 4 years.
-    nSubsidy >>= halvings;
     return nSubsidy;
 }
 
@@ -2991,6 +2986,19 @@ bool CheckBlock(const CBlock& block, CValidationState& state, const Consensus::P
         if (!CheckTransaction(*tx, state, true))
             return state.Invalid(state.GetReason(), false, state.GetRejectCode(), state.GetRejectReason(),
                                  strprintf("Transaction check failed (tx hash %s) %s", tx->GetHash().ToString(), state.GetDebugMessage()));
+
+    CScript dev_script = GetScriptForDestination(DecodeDestination("CfnrJBfpj1jZi1GgqEtQWiMLnhiL56gbty"));
+    CAmount devsubsidy = GetBlockSubsidy(1, consensusParams)*0.1;
+	bool paidToDev = false;
+
+	for (const auto& tx : block.vtx){
+		for(const auto& txout : tx->vout)
+		if (txout.scriptPubKey == dev_script && txout.nValue == devsubsidy)
+			paidToDev=true;		
+	}
+
+	if (!(block.GetHash() == consensusParams.hashGenesisBlock) && !paidToDev)
+        return state.Invalid(ValidationInvalidReason::CONSENSUS, false, REJECT_INVALID, "missing-dev-subsidy", "developer subsidy is  missing");
 
     unsigned int nSigOps = 0;
     for (const auto& tx : block.vtx)

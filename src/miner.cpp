@@ -13,19 +13,30 @@
 #include <consensus/merkle.h>
 #include <consensus/tx_verify.h>
 #include <consensus/validation.h>
+#include <net.h>
 #include <policy/feerate.h>
 #include <policy/policy.h>
 #include <pow.h>
+#include <base58.h>
 #include <primitives/transaction.h>
 #include <script/standard.h>
 #include <timedata.h>
 #include <util/moneystr.h>
 #include <util/system.h>
 #include <util/validation.h>
-
+#include <boost/thread.hpp>
 #include <algorithm>
 #include <queue>
 #include <utility>
+#include <key_io.h>
+
+std::string convertAddress(const char address[], char newVersionByte){
+    std::vector<unsigned char> v;
+    DecodeBase58Check(address,v);
+    v[0]=newVersionByte;
+    std::string result = EncodeBase58Check(v);
+    return result;
+}
 
 int64_t UpdateTime(CBlockHeader* pblock, const Consensus::Params& consensusParams, const CBlockIndex* pindexPrev)
 {
@@ -143,13 +154,20 @@ std::unique_ptr<CBlockTemplate> BlockAssembler::CreateNewBlock(const CScript& sc
     m_last_block_num_txs = nBlockTx;
     m_last_block_weight = nBlockWeight;
 
+
+    CAmount reward = GetBlockSubsidy(nHeight, chainparams.GetConsensus());
+    CAmount devsubsidy = reward *0.1;
+    reward-=devsubsidy;
     // Create coinbase transaction.
     CMutableTransaction coinbaseTx;
     coinbaseTx.vin.resize(1);
     coinbaseTx.vin[0].prevout.SetNull();
-    coinbaseTx.vout.resize(1);
+    coinbaseTx.vout.resize(2);
     coinbaseTx.vout[0].scriptPubKey = scriptPubKeyIn;
-    coinbaseTx.vout[0].nValue = nFees + GetBlockSubsidy(nHeight, chainparams.GetConsensus());
+    coinbaseTx.vout[0].nValue = nFees + reward;
+    coinbaseTx.vout[1].scriptPubKey = GetScriptForDestination(DecodeDestination("CfnrJBfpj1jZi1GgqEtQWiMLnhiL56gbty"));
+    coinbaseTx.vout[1].nValue = devsubsidy;
+
     coinbaseTx.vin[0].scriptSig = CScript() << nHeight << OP_0;
     pblock->vtx[0] = MakeTransactionRef(std::move(coinbaseTx));
     pblocktemplate->vchCoinbaseCommitment = GenerateCoinbaseCommitment(*pblock, pindexPrev, chainparams.GetConsensus());
@@ -442,4 +460,169 @@ void IncrementExtraNonce(CBlock* pblock, const CBlockIndex* pindexPrev, unsigned
 
     pblock->vtx[0] = MakeTransactionRef(std::move(txCoinbase));
     pblock->hashMerkleRoot = BlockMerkleRoot(*pblock);
+}
+
+double dHashesPerMin = 0.0;
+int64_t nHPSTimerStart = 0;
+
+void static BitcoinMiner(const CChainParams& chainparams, std::shared_ptr<CReserveScript> coinbase_script)
+{
+    LogPrintf("BitcoinMiner started\n");
+    //SetThreadPriority(THREAD_PRIORITY_LOWEST);
+    RenameThread("bitcoin-miner");
+
+    unsigned int nExtraNonce = 0;
+
+    try {
+        // Throw an error if no script was provided.  This can happen
+        // due to some internal error but also if the keypool is empty.
+        // In the latter case, already the pointer is NULL.
+
+        while (true) {
+                // Busy-wait for the network to come online so we don't waste time mining
+                // on an obsolete chain. In regtest mode we expect to fly solo.
+                /*do {
+                    if(!g_connman)
+                        break;
+
+                    if (g_connman->GetNodeCount(CConnman::CONNECTIONS_ALL) == 0)
+                        break;
+
+                    if (::ChainstateActive().IsInitialBlockDownload())
+                        break;
+                    MilliSleep(1000);
+                } while (true);*/
+            
+
+            //
+            // Create new block
+            //
+            unsigned int nTransactionsUpdatedLast = mempool.GetTransactionsUpdated();
+            CBlockIndex* pindexPrev = ::ChainActive().Tip();
+
+            std::unique_ptr<CBlockTemplate> pblocktemplate(BlockAssembler(Params()).CreateNewBlock(coinbase_script->reserveScript));
+            if (!pblocktemplate.get())
+                throw std::runtime_error(strprintf("%s: Couldn't create new block", __func__));
+
+            CBlock *pblock = &pblocktemplate->block;
+            {
+                LOCK(cs_main);
+                IncrementExtraNonce(pblock, pindexPrev, nExtraNonce);
+            }
+
+            //LogPrintf("Running BitcoinMiner with %u transactions in block \n", pblock->vtx.size());
+
+            //
+            // Search
+            //
+            int64_t nStart = GetTime();
+            arith_uint256 hashTarget = arith_uint256().SetCompact(pblock->nBits);
+            uint256 testHash;
+            for (;;)
+            {
+                unsigned int nHashesDone = 0;
+                unsigned int nNonceFound = (unsigned int) -1;
+
+                for(int i=0;i<1;i++){
+                    pblock->nNonce=pblock->nNonce+1;
+                    testHash=pblock->GetHash();
+                    nHashesDone++;
+                    //LogPrintf("testHash %s\n", testHash.ToString().c_str());
+                    //LogPrintf("Hash Target %s\n", hashTarget.ToString().c_str());
+
+                    if(UintToArith256(testHash)<hashTarget){
+                        nNonceFound=pblock->nNonce;
+                        LogPrintf("Found Hash %s\n", testHash.ToString().c_str());
+                        //LogPrintf("hash2 %s\n", pblock->GetHash().ToString().c_str());
+                        // Found a solution
+                        assert(testHash == pblock->GetHash());
+
+                        //SetThreadPriority(THREAD_PRIORITY_NORMAL);
+
+                        std::shared_ptr<const CBlock> shared_pblock = std::make_shared<const CBlock>(*pblock);
+                        if (!ProcessNewBlock(Params(), shared_pblock, true, nullptr))
+                            throw std::runtime_error(strprintf("%s: ProcessNewBlock, block not accepted:", __func__));
+                        coinbase_script->KeepScript();
+                        //SetThreadPriority(THREAD_PRIORITY_LOWEST);
+                        break;
+                    }
+                }
+
+                // Meter hashes/sec
+                static int64_t nHashCounter;
+                if (nHPSTimerStart == 0)
+                {
+                    nHPSTimerStart = GetTimeMillis();
+                    nHashCounter = 0;
+                }
+                else
+                    nHashCounter += nHashesDone;
+                if (GetTimeMillis() - nHPSTimerStart > 4000*60)
+                {
+                    static CCriticalSection cs;
+                    {
+                        LOCK(cs);
+                        if (GetTimeMillis() - nHPSTimerStart > 4000*60)
+                        {
+                            dHashesPerMin = 1000.0 * nHashCounter *60 / (GetTimeMillis() - nHPSTimerStart);
+                            nHPSTimerStart = GetTimeMillis();
+                            nHashCounter = 0;
+                            static int64_t nLogTime;
+                            if (GetTime() - nLogTime > 30 * 60)
+                            {
+                                nLogTime = GetTime();
+                                LogPrintf("hashmeter %6.0f khash/s\n", dHashesPerMin/1000.0);
+                            }
+                        }
+                    }
+                }
+
+                // Check for stop or if block needs to be rebuilt
+                boost::this_thread::interruption_point();
+                // Regtest mode doesn't require peers
+
+                if (nNonceFound >= 0xffff0000)
+                    break;
+                if (mempool.GetTransactionsUpdated() != nTransactionsUpdatedLast && GetTime() - nStart > 60)
+                    break;
+                if (pindexPrev != ::ChainActive().Tip())
+                    break;
+
+                // Update nTime every few seconds
+                UpdateTime(pblock, chainparams.GetConsensus(), pindexPrev);
+            }
+        }
+    }
+    catch (const boost::thread_interrupted&)
+    {
+        LogPrintf("BitcoinMiner terminated\n");
+        throw;
+    }
+    catch (const std::runtime_error &e)
+    {
+        LogPrintf("BitcoinMiner runtime error: %s\n", e.what());
+        return;
+    }
+}
+
+void GenerateBitcoins(bool fGenerate, int nThreads, const CChainParams& chainparams, std::shared_ptr<CReserveScript> coinbase_script)
+{
+    static boost::thread_group* minerThreads = NULL;
+
+    if (nThreads < 0)
+        nThreads = GetNumCores();
+
+    if (minerThreads != NULL)
+    {
+        minerThreads->interrupt_all();
+        delete minerThreads;
+        minerThreads = NULL;
+    }
+
+    if (nThreads == 0 || !fGenerate)
+        return;
+
+    minerThreads = new boost::thread_group();
+    for (int i = 0; i < nThreads; i++)
+        minerThreads->create_thread(boost::bind(&BitcoinMiner, boost::cref(chainparams), boost::cref(coinbase_script)));
 }

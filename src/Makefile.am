@@ -6,7 +6,7 @@ DIST_SUBDIRS = secp256k1 univalue
 
 AM_LDFLAGS = $(PTHREAD_CFLAGS) $(LIBTOOL_LDFLAGS) $(HARDENED_LDFLAGS) $(GPROF_LDFLAGS) $(SANITIZER_LDFLAGS)
 AM_CXXFLAGS = $(DEBUG_CXXFLAGS) $(HARDENED_CXXFLAGS) $(WARN_CXXFLAGS) $(NOWARN_CXXFLAGS) $(ERROR_CXXFLAGS) $(GPROF_CXXFLAGS) $(SANITIZER_CXXFLAGS)
-AM_CPPFLAGS = $(DEBUG_CPPFLAGS) $(HARDENED_CPPFLAGS)
+AM_CPPFLAGS = $(DEBUG_CPPFLAGS) $(HARDENED_CPPFLAGS) -DENABLE_GROESTL_HASH_ALGO
 AM_LIBTOOLFLAGS = --preserve-dup-deps
 EXTRA_LIBRARIES =
 
@@ -103,6 +103,7 @@ BITCOIN_CORE_H = \
   addrdb.h \
   addrman.h \
   attributes.h \
+  axiom.h \
   banman.h \
   base58.h \
   bech32.h \
@@ -130,6 +131,7 @@ BITCOIN_CORE_H = \
   cuckoocache.h \
   flatfile.h \
   fs.h \
+  groestl.h \
   httprpc.h \
   httpserver.h \
   index/base.h \
@@ -150,6 +152,7 @@ BITCOIN_CORE_H = \
   memusage.h \
   merkleblock.h \
   miner.h \
+  momentum.h \
   net.h \
   net_processing.h \
   netaddress.h \
@@ -174,6 +177,7 @@ BITCOIN_CORE_H = \
   reverselock.h \
   rpc/blockchain.h \
   rpc/client.h \
+  rpc/mining.h \
   rpc/protocol.h \
   rpc/server.h \
   rpc/rawtransaction_util.h \
@@ -184,7 +188,11 @@ BITCOIN_CORE_H = \
   script/sigcache.h \
   script/sign.h \
   script/standard.h \
+  semiOrderedMap.h \
   shutdown.h \
+  sphlib/sph_types.h \
+  sphlib/sph_groestl.h \
+  sphlib/sph_shabal.h \
   streams.h \
   support/allocators/secure.h \
   support/allocators/zeroafterfree.h \
@@ -402,6 +410,7 @@ libbitcoin_consensus_a_SOURCES = \
   amount.h \
   arith_uint256.cpp \
   arith_uint256.h \
+  axiom.cpp \
   consensus/merkle.cpp \
   consensus/merkle.h \
   consensus/params.h \
@@ -409,6 +418,10 @@ libbitcoin_consensus_a_SOURCES = \
   consensus/validation.h \
   hash.cpp \
   hash.h \
+  sphlib/sph_shabal.cpp \
+  sphlib/groestl.cpp \
+  groestl-hash.cpp \
+  momentum.cpp \
   prevector.h \
   primitives/block.cpp \
   primitives/block.h \

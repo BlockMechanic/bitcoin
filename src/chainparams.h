@@ -125,5 +125,4 @@ const CChainParams &Params();
  * @throws std::runtime_error when the chain is not supported.
  */
 void SelectParams(const std::string& chain);
-
 #endif // BITCOIN_CHAINPARAMS_H

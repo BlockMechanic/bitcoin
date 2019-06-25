@@ -269,7 +269,7 @@ public:
  * If a key is reserved and KeepKey() is not called, then the key will be
  * returned to the keypool when the CReserveObject goes out of scope.
  */
-class CReserveKey
+class CReserveKey final : public CReserveScript
 {
 protected:
     //! The wallet to reserve the keypool key from
@@ -303,6 +303,7 @@ public:
     void ReturnKey();
     //! Keep the key. Do not return it to the keypool when this object goes out of scope
     void KeepKey();
+    void KeepScript() override { KeepKey(); }
 };
 
 /** Address book data */
@@ -1179,6 +1180,8 @@ public:
     bool DelAddressBook(const CTxDestination& address);
 
     const std::string& GetLabelName(const CScript& scriptPubKey) const EXCLUSIVE_LOCKS_REQUIRED(cs_wallet);
+
+    void GetScriptForMining(std::shared_ptr<CReserveScript> &script);
 
     unsigned int GetKeyPoolSize() EXCLUSIVE_LOCKS_REQUIRED(cs_wallet)
     {

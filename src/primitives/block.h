@@ -27,7 +27,10 @@ public:
     uint32_t nTime;
     uint32_t nBits;
     uint32_t nNonce;
-
+#ifdef ENABLE_MOMENTUM_HASH_ALGO
+    uint32_t nBirthdayA;
+    uint32_t nBirthdayB;
+#endif
     CBlockHeader()
     {
         SetNull();
@@ -43,6 +46,10 @@ public:
         READWRITE(nTime);
         READWRITE(nBits);
         READWRITE(nNonce);
+#ifdef ENABLE_MOMENTUM_HASH_ALGO
+        READWRITE(nBirthdayA);
+        READWRITE(nBirthdayB);
+#endif
     }
 
     void SetNull()
@@ -53,19 +60,38 @@ public:
         nTime = 0;
         nBits = 0;
         nNonce = 0;
+#ifdef ENABLE_MOMENTUM_HASH_ALGO
+        nBirthdayA = 0;
+		nBirthdayB = 0;
+#endif
     }
 
     bool IsNull() const
     {
         return (nBits == 0);
     }
-
+#ifdef ENABLE_SHA_HASH_ALGO
+    uint256 GetSHA256() const;
+#endif
+#ifdef ENABLE_MEM_HASH_ALGO 
+    uint256 GetMemHash() const;
+#endif
+#ifdef ENABLE_MOMENTUM_HASH_ALGO
+    uint256 GetMomentumHash() const;
+    uint256 GetVerifiedHash() const;
+    uint256 CalculateBestBirthdayHash();
+    uint256 GetMidHash() const;
+#endif
+#ifdef ENABLE_GROESTL_HASH_ALGO
+    uint256 GetGroestlHash() const;
+#endif
     uint256 GetHash() const;
 
     int64_t GetBlockTime() const
     {
         return (int64_t)nTime;
     }
+    std::string ToString() const;
 };
 
 
@@ -113,6 +139,10 @@ public:
         block.nTime          = nTime;
         block.nBits          = nBits;
         block.nNonce         = nNonce;
+# if ENABLE_MOMENTUM_HASH_ALGO
+		block.nBirthdayA     = nBirthdayA;
+        block.nBirthdayB     = nBirthdayB;         
+#endif
         return block;
     }
 

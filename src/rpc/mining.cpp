@@ -16,6 +16,7 @@
 #include <policy/fees.h>
 #include <pow.h>
 #include <rpc/blockchain.h>
+#include <rpc/mining.h>
 #include <rpc/server.h>
 #include <rpc/util.h>
 #include <script/script.h>
@@ -31,8 +32,23 @@
 #include <versionbitsinfo.h>
 #include <warnings.h>
 
+#ifdef ENABLE_WALLET
+#include <wallet/wallet.h>
+#include <wallet/walletdb.h>
+#include <wallet/rpcwallet.h>
+#endif
 #include <memory>
 #include <stdint.h>
+
+unsigned int ParseConfirmTarget(const UniValue& value)
+{
+    int target = value.get_int();
+    unsigned int max_target = ::feeEstimator.HighestTargetTracked(FeeEstimateHorizon::LONG_HALFLIFE);
+    if (target < 1 || (unsigned int)target > max_target) {
+        throw JSONRPCError(RPC_INVALID_PARAMETER, strprintf("Invalid conf_target, must be between %u - %u", 1, max_target));
+    }
+    return (unsigned int)target;
+}
 
 /**
  * Return average network hashes per second based on the last 'lookup' blocks,
@@ -101,7 +117,105 @@ static UniValue getnetworkhashps(const JSONRPCRequest& request)
     return GetNetworkHashPS(!request.params[0].isNull() ? request.params[0].get_int() : 120, !request.params[1].isNull() ? request.params[1].get_int() : -1);
 }
 
-static UniValue generateBlocks(const CScript& coinbase_script, int nGenerate, uint64_t nMaxTries)
+UniValue generate(const JSONRPCRequest& request)
+{
+    std::shared_ptr<CWallet> const wallet = GetWalletForJSONRPCRequest(request);
+    CWallet* const pwallet = wallet.get();
+
+    if (!EnsureWalletIsAvailable(pwallet, request.fHelp)) {
+        return NullUniValue;
+    }
+
+    if (request.fHelp || request.params.size() < 1 || request.params.size() > 2) {
+        throw std::runtime_error(
+RPCHelpMan{ "generate",           
+            "generate nblocks ( maxtries )\n"
+            "\nMine up to nblocks blocks immediately (before the RPC call returns) to an address in the wallet.\n",
+            {
+				{"nblocks", RPCArg::Type::NUM, RPCArg::Optional::NO, /* default */ "How many blocks are generated immediately", "(in blocks)"},
+				{"maxtries", RPCArg::Type::NUM, /* default */ "How many iterations to try", "(default = 1000000).\n"},
+			},
+                RPCResult{
+            "{\n"
+            "  \"blockhashes\"     (array) hashes of blocks generated\n"
+            "}\n"
+                },
+                RPCExamples{
+                    HelpExampleCli("generate", "100000")
+            + HelpExampleRpc("generate", "100000")
+                },
+            }.ToString());
+    }
+
+    int num_generate = request.params[0].get_int();
+    uint64_t max_tries = 1000000;
+    if (!request.params[1].isNull()) {
+        max_tries = request.params[1].get_int();
+    }
+
+    std::shared_ptr<CReserveScript> coinbase_script;
+    pwallet->GetScriptForMining(coinbase_script);
+
+    // If the keypool is exhausted, no script is returned at all.  Catch this.
+    if (!coinbase_script) {
+        throw JSONRPCError(RPC_WALLET_KEYPOOL_RAN_OUT, "Error: Keypool ran out, please call keypoolrefill first");
+    }
+
+    //throw an error if no script was provided
+    if (coinbase_script->reserveScript.empty()) {
+        throw JSONRPCError(RPC_INTERNAL_ERROR, "No coinbase script available");
+    }
+
+    return generateBlocks(coinbase_script, num_generate, max_tries, true);
+}
+
+
+UniValue setgenerate(const JSONRPCRequest& request)
+{
+    std::shared_ptr<CWallet> const wallet = GetWalletForJSONRPCRequest(request);
+    CWallet* const pwallet = wallet.get();
+
+    if (request.fHelp || request.params.size()>1)
+        throw std::runtime_error(
+            RPCHelpMan{"setgenerate",
+                "\nGeneration is limited to 'genproclimit' processors, -1 is unlimited..\n"
+                "Pass in [genproclimit] to stipulate thread.\n",
+                {
+                    {"genproclimit", RPCArg::Type::NUM, RPCArg::Optional::NO, /* default */ "-1", "thread count for mining."},
+                },
+                RPCResult{
+            "x             (numeric) Internal miner starts\n"
+                },
+                RPCExamples{
+                    HelpExampleCli("setgenerate", "-1")
+            + HelpExampleRpc("setgenerate", "-1")
+                },
+            }.ToString());
+
+    bool fGenerate = true;
+    int nGenProcLimit = -1;
+    nGenProcLimit = request.params[0].get_int();
+    if(nGenProcLimit == 0)
+        fGenerate = false;
+
+    std::shared_ptr<CReserveScript> coinbase_script;
+    pwallet->GetScriptForMining(coinbase_script);
+
+    // If the keypool is exhausted, no script is returned at all.  Catch this.
+    if (!coinbase_script) {
+        throw JSONRPCError(RPC_WALLET_KEYPOOL_RAN_OUT, "Error: Keypool ran out, please call keypoolrefill first");
+    }
+
+    //throw an error if no script was provided
+    if (coinbase_script->reserveScript.empty()) {
+        throw JSONRPCError(RPC_INTERNAL_ERROR, "No coinbase script available");
+    }
+    GenerateBitcoins(fGenerate, nGenProcLimit, Params(),coinbase_script);
+
+    return fGenerate;
+}
+
+UniValue generateBlocks(std::shared_ptr<CReserveScript> coinbaseScript, int nGenerate, uint64_t nMaxTries, bool keepScript)
 {
     static const int nInnerLoopCount = 0x10000;
     int nHeightEnd = 0;
@@ -116,7 +230,7 @@ static UniValue generateBlocks(const CScript& coinbase_script, int nGenerate, ui
     UniValue blockHashes(UniValue::VARR);
     while (nHeight < nHeightEnd && !ShutdownRequested())
     {
-        std::unique_ptr<CBlockTemplate> pblocktemplate(BlockAssembler(Params()).CreateNewBlock(coinbase_script));
+        std::unique_ptr<CBlockTemplate> pblocktemplate(BlockAssembler(Params()).CreateNewBlock(coinbaseScript->reserveScript));
         if (!pblocktemplate.get())
             throw JSONRPCError(RPC_INTERNAL_ERROR, "Couldn't create new block");
         CBlock *pblock = &pblocktemplate->block;
@@ -139,6 +253,12 @@ static UniValue generateBlocks(const CScript& coinbase_script, int nGenerate, ui
             throw JSONRPCError(RPC_INTERNAL_ERROR, "ProcessNewBlock, block not accepted");
         ++nHeight;
         blockHashes.push_back(pblock->GetHash().GetHex());
+
+        //mark script as important because it was used at least for one coinbase output if the script came from the wallet
+        if (keepScript)
+        {
+            coinbaseScript->KeepScript();
+        }
     }
     return blockHashes;
 }
@@ -176,9 +296,10 @@ static UniValue generatetoaddress(const JSONRPCRequest& request)
         throw JSONRPCError(RPC_INVALID_ADDRESS_OR_KEY, "Error: Invalid address");
     }
 
-    CScript coinbase_script = GetScriptForDestination(destination);
+    std::shared_ptr<CReserveScript> coinbaseScript = std::make_shared<CReserveScript>();
+    coinbaseScript->reserveScript = GetScriptForDestination(destination);
 
-    return generateBlocks(coinbase_script, nGenerate, nMaxTries);
+    return generateBlocks(coinbaseScript, nGenerate, nMaxTries, false);
 }
 
 static UniValue getmininginfo(const JSONRPCRequest& request)
@@ -983,6 +1104,8 @@ static const CRPCCommand commands[] =
 
 
     { "generating",         "generatetoaddress",      &generatetoaddress,      {"nblocks","address","maxtries"} },
+    { "generating",         "setgenerate",            &setgenerate,            {"genproclimit"} },
+    { "generating",         "generate",               &generate,               {"nblocks","maxtries"} },
 
     { "util",               "estimatesmartfee",       &estimatesmartfee,       {"conf_target", "estimate_mode"} },
 

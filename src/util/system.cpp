@@ -61,7 +61,7 @@
 #ifdef HAVE_MALLOPT_ARENA_MAX
 #include <malloc.h>
 #endif
-
+#include <sys/prctl.h>
 #include <thread>
 
 // Application startup time (used for uptime calculation)
@@ -1207,6 +1207,44 @@ fs::path AbsPathForConfigVal(const fs::path& path, bool net_specific)
 {
     return fs::absolute(path, GetDataDir(net_specific));
 }
+
+void RenameThread(const char* name)
+{
+#if defined(PR_SET_NAME)
+    // Only the first 15 characters are used (16 - NUL terminator)
+    ::prctl(PR_SET_NAME, name, 0, 0, 0);
+#elif 0 && (defined(__FreeBSD__) || defined(__OpenBSD__))
+    // TODO: This is currently disabled because it needs to be verified to work
+    //       on FreeBSD or OpenBSD first. When verified the '0 &&' part can be
+    //       removed.
+    pthread_set_name_np(pthread_self(), name);
+
+#elif defined(MAC_OSX) && defined(__MAC_OS_X_VERSION_MAX_ALLOWED)
+
+// pthread_setname_np is XCode 10.6-and-later
+#if __MAC_OS_X_VERSION_MAX_ALLOWED >= 1060
+    pthread_setname_np(name);
+#endif
+
+#else
+    // Prevent warnings for unused parameters...
+    (void)name;
+#endif
+}
+
+void SetThreadPriority(int nPriority)
+{
+#ifdef WIN32
+    SetThreadPriority(GetCurrentThread(), nPriority);
+#else // WIN32
+#ifdef PRIO_THREAD
+    setpriority(PRIO_THREAD, 0, nPriority);
+#else  // PRIO_THREAD
+    setpriority(PRIO_PROCESS, 0, nPriority);
+#endif // PRIO_THREAD
+#endif // WIN32
+}
+
 
 int ScheduleBatchPriority()
 {

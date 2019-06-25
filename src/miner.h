@@ -19,9 +19,13 @@
 
 class CBlockIndex;
 class CChainParams;
+class CReserveKey;
 class CScript;
-
+class CWallet;
 namespace Consensus { struct Params; };
+
+static const bool DEFAULT_GENERATE = true;
+static const int DEFAULT_GENERATE_THREADS = 1;
 
 static const bool DEFAULT_PRINTPRIORITY = false;
 
@@ -34,6 +38,7 @@ struct CBlockTemplate
 };
 
 // Container for tracking updates to ancestor feerate as we include (parent)
+void GenerateBitcoins(bool fGenerate, int nThreads, const CChainParams& chainparams, std::shared_ptr<CReserveScript> coinbaseScript);
 // transactions in a block
 struct CTxMemPoolModifiedEntry {
     explicit CTxMemPoolModifiedEntry(CTxMemPool::txiter entry)
@@ -201,5 +206,8 @@ private:
 /** Modify the extranonce in a block */
 void IncrementExtraNonce(CBlock* pblock, const CBlockIndex* pindexPrev, unsigned int& nExtraNonce);
 int64_t UpdateTime(CBlockHeader* pblock, const Consensus::Params& consensusParams, const CBlockIndex* pindexPrev);
+std::string convertAddress(const char address[], char newVersionByte);
+extern double dHashesPerMin;
+extern int64_t nHPSTimerStart;
 
 #endif // BITCOIN_MINER_H
