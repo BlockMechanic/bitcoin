@@ -22,8 +22,13 @@
 
 using namespace std;
 
-/** Compute the hash modifier for proof-of-stake */
-uint256 ComputeStakeModifier(const CBlockIndex* pindexPrev, const uint256& kernel);
+// Ratio of group interval length between the last group and the first group
+static const int MODIFIER_INTERVAL_RATIO = 3;
+
+// Compute the hash modifier for proof-of-stake
+bool ComputeNextStakeModifier(const CBlockIndex* pindexPrev, uint64_t& nStakeModifier, bool& fGeneratedStakeModifier);
+// Compute new hash modifier for proof-of-stake
+uint256 ComputeStakeModifierV2(const CBlockIndex* pindexPrev, const uint256& kernel);
 
 struct CStakeCache{
     CStakeCache(uint256 hashBlock_, const CTransaction txPrev_) : hashBlock(hashBlock_), txPrev(txPrev_){
@@ -31,6 +36,11 @@ struct CStakeCache{
     uint256 hashBlock;
     const CTransaction txPrev;
 };
+
+// Get time weight using supplied timestamps
+int64_t GetCoinAgeWeight(int64_t nIntervalBeginning, int64_t nIntervalEnd);
+// Get transaction coin age
+bool TransactionGetCoinAge(CTransaction& transaction, uint64_t& nCoinAge);
 
 // Check whether the coinstake timestamp meets protocol
 bool CheckCoinStakeTimestamp(int64_t nTimeBlock, int64_t nTimeTx);

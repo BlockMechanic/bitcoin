@@ -295,6 +295,29 @@ UniValue getstakinginfo(const UniValue& params, bool fHelp)
     return obj;
 }
 
+UniValue getstakesubsidy(const UniValue& params, bool fHelp)
+{
+    if (fHelp || params.size() != 1)
+        throw runtime_error(
+            "getstakesubsidy <hex string>\n"
+            "Returns proof-of-stake subsidy value for the specified coinstake.");
+
+    vector<unsigned char> txData(ParseHex(params[0].get_str()));
+    CDataStream ssData(txData, SER_NETWORK, PROTOCOL_VERSION);
+    CTransaction tx;
+    try {
+        ssData >> tx;
+    }
+    catch (std::exception &e) {
+        throw JSONRPCError(RPC_DESERIALIZATION_ERROR, "POT decode failed");
+    }
+
+    uint64_t nCoinAge;
+    if (!TransactionGetCoinAge(tx, nCoinAge))
+        throw JSONRPCError(RPC_MISC_ERROR, "GetCoinAge failed");
+
+    return (uint64_t)GetProofOfStakeSubsidy(pindexBestHeader->nHeight, nCoinAge, 0, pindexBestHeader);
+} 
 
 // NOTE: Unlike wallet RPC (which use BTC values), mining RPCs follow GBT (BIP 22) in using satoshi amounts
 UniValue prioritisetransaction(const UniValue& params, bool fHelp)
@@ -1027,6 +1050,7 @@ static const CRPCCommand commands[] =
     { "mining",             "submitblock",            &submitblock,            true  },
     { "mining",             "checkkernel",            &checkkernel,            true  },
     { "mining",             "getstakinginfo",         &getstakinginfo,         true  },
+    { "mining",             "getstakesubsidy",        &getstakesubsidy,        true  },
 
     { "generating",         "generate",               &generate,               true  },
     { "generating",         "generatetoaddress",      &generatetoaddress,      true  },

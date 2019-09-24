@@ -1797,9 +1797,14 @@ CAmount GetProofOfWorkSubsidy(int nHeight, const Consensus::Params& consensusPar
     return nSubsidy;
 }
 
-CAmount GetProofOfStakeSubsidy()
+CAmount GetProofOfStakeSubsidy(int nHeight, int64_t nCoinAge, int64_t nFees, bool IsStaticRewardEnabled)
 {
-    return COIN * 3 / 2;
+    CAmount nSubsidy;
+    if (IsStaticRewardEnabled)
+        nSubsidy = COIN * 42;
+    else
+        nSubsidy = nCoinAge * 5 * CENT * 33 / (365 * 33 + 8);
+    return nSubsidy + nFees;
 }
 
 bool IsInitialBlockDownload()
@@ -2434,8 +2439,26 @@ bool ConnectBlock(const CBlock& block, CValidationState& state, CBlockIndex* pin
         return true;
     }
 
+    arith_uint256 hashProof;
+
+    if (block.IsProofOfWork())
+        hashProof = UintToArith256(block.GetPoWHash()); 
+
+    if (!pindex->SetStakeEntropyBit(block.GetStakeEntropyBit()))
+        return state.DoS(1,error("ConnectBlock() : SetStakeEntropyBit() failed"), REJECT_INVALID, "bad-entropy-bit");
+
+    // Record proof hash value
+    pindex->hashProof = hashProof;
+
+    uint64_t nStakeModifier = 0;
+    bool fGeneratedStakeModifier = false;
+    if (!ComputeNextStakeModifier(pindex->pprev, nStakeModifier, fGeneratedStakeModifier))
+        return state.DoS(1, error("ConnectBlock() : ComputeNextStakeModifier() failed"), REJECT_INVALID, "bad-stake-modifier");
+
+    pindex->SetStakeModifier(nStakeModifier, fGeneratedStakeModifier);
+
     // Set proof-of-stake hash modifier
-    pindex->nStakeModifier = ComputeStakeModifier(pindex->pprev, block.IsProofOfStake() ? block.vtx[1].vin[0].prevout.hash : block.GetHash());
+    pindex->nStakeModifierV2 = ComputeStakeModifierV2(pindex->pprev, block.IsProofOfStake() ? block.vtx[1].vin[0].prevout.hash : block.GetHash());
 
     // Check difficulty
     if (block.nBits != GetNextTargetRequired(pindex->pprev, &block, chainparams.GetConsensus(), block.IsProofOfStake()))
@@ -2617,21 +2640,26 @@ bool ConnectBlock(const CBlock& block, CValidationState& state, CBlockIndex* pin
     LogPrint("bench", "      - Connect %u transactions: %.2fms (%.3fms/tx, %.3fms/txin) [%.2fs]\n", (unsigned)block.vtx.size(), 0.001 * (nTime3 - nTime2), 0.001 * (nTime3 - nTime2) / block.vtx.size(), nInputs <= 1 ? 0 : 0.001 * (nTime3 - nTime2) / (nInputs-1), nTimeConnect * 0.000001);
 
     if (block.IsProofOfWork()) {
-            CAmount blockReward = nFees + GetProofOfWorkSubsidy(pindex->nHeight, chainparams.GetConsensus());
-            if (block.vtx[0].GetValueOut() > blockReward)
-                return state.DoS(100,
-                                 error("ConnectBlock(): coinbase pays too much (actual=%d vs limit=%d)",
-                                       block.vtx[0].GetValueOut(), blockReward),
-                                       REJECT_INVALID, "bad-cb-amount");
+        CAmount blockReward = nFees + GetProofOfWorkSubsidy(pindex->nHeight, chainparams.GetConsensus());
+        if (block.vtx[0].GetValueOut() > blockReward)
+            return state.DoS(100,
+                            error("ConnectBlock(): coinbase pays too much (actual=%d vs limit=%d)",
+                                    block.vtx[0].GetValueOut(), blockReward),
+                                    REJECT_INVALID, "bad-cb-amount");
     }
 
-    if (block.IsProofOfStake() && chainparams.GetConsensus().IsProtocolV3(block.GetBlockTime())) {
-            CAmount blockReward = nFees + GetProofOfStakeSubsidy();
-            if (nActualStakeReward > blockReward)
-                return state.DoS(100,
-                                 error("ConnectBlock(): coinstake pays too much (actual=%d vs limit=%d)",
-                                       nActualStakeReward, blockReward),
-                                       REJECT_INVALID, "bad-cs-amount");
+    if (block.IsProofOfStake()) {
+        // ppcoin: coin stake tx earns reward instead of paying fee
+        uint64_t nCoinAge;
+        if (!TransactionGetCoinAge(const_cast<CTransaction&>(block.vtx[1]), nCoinAge))
+            return error("ConnectBlock() : %s unable to get coin age for coinstake", block.vtx[1].GetHash().ToString());
+
+        CAmount blockReward = nFees + GetProofOfStakeSubsidy(pindex->nHeight, nCoinAge, nFees, chainparams.GetConsensus().IsProtocolV3(block.GetBlockTime()));
+        if (nActualStakeReward > blockReward)
+            return state.DoS(100,
+                            error("ConnectBlock(): coinstake pays too much (actual=%d vs limit=%d)",
+                                    nActualStakeReward, blockReward),
+                                    REJECT_INVALID, "bad-cs-amount");
     }
 
     if (!control.Wait())
