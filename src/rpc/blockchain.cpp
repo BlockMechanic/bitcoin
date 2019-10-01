@@ -173,6 +173,8 @@ UniValue blockToJSON(const CBlock& block, const CBlockIndex* blockindex, bool tx
     if (pnext)
         result.push_back(Pair("nextblockhash", pnext->GetBlockHash().GetHex()));
     result.push_back(Pair("flags", blockindex->IsProofOfStake()? "proof-of-stake" : "proof-of-work"));
+    result.push_back(Pair("proofhash", blockindex->IsProofOfStake()? blockindex->hashProofOfStake.GetHex() : blockindex->GetBlockHash().GetHex()));
+    result.push_back(Pair("entropybit", (int)blockindex->GetStakeEntropyBit()));
     result.push_back(Pair("modifier", strprintf("%016llx", blockindex->nStakeModifier)));
     result.push_back(Pair("modifierv2", blockindex->nStakeModifierV2.GetHex()));
     if (block.IsProofOfStake())

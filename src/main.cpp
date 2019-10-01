@@ -2439,25 +2439,37 @@ bool ConnectBlock(const CBlock& block, CValidationState& state, CBlockIndex* pin
         return true;
     }
 
-    arith_uint256 hashProof;
+    uint256 hashProofOfStake;
+
+    if (block.IsProofOfStake()) {
+        const COutPoint &prevout = block.vtx[1].vin[0].prevout;
+        const CCoins *coins = view.AccessCoins(prevout.hash);
+        if (!coins)
+            return state.DoS(100, error("ConnectBlock() : kernel input unavailable"),
+                                REJECT_INVALID, "bad-cs-kernel");
+
+        if (!CheckProofOfStake(pindex->pprev, block.vtx[1], block.nBits, hashProofOfStake, state))
+            return error("ConnectBlock() : check proof-of-stake signature failed for block %s", block.GetHash().GetHex());
+    }
 
     if (block.IsProofOfWork())
-        hashProof = UintToArith256(block.GetPoWHash()); 
+        hashProofOfStake = block.GetPoWHash(); 
 
     if (!pindex->SetStakeEntropyBit(block.GetStakeEntropyBit()))
         return state.DoS(1,error("ConnectBlock() : SetStakeEntropyBit() failed"), REJECT_INVALID, "bad-entropy-bit");
 
     // Record proof hash value
-    pindex->hashProof = hashProof;
+    pindex->hashProofOfStake = hashProofOfStake;
 
     uint64_t nStakeModifier = 0;
     bool fGeneratedStakeModifier = false;
     if (!ComputeNextStakeModifier(pindex->pprev, nStakeModifier, fGeneratedStakeModifier))
         return state.DoS(1, error("ConnectBlock() : ComputeNextStakeModifier() failed"), REJECT_INVALID, "bad-stake-modifier");
 
+    // Set proof-of-stake hash modifier
     pindex->SetStakeModifier(nStakeModifier, fGeneratedStakeModifier);
 
-    // Set proof-of-stake hash modifier
+    // Set proof-of-stake hash modifier V2
     pindex->nStakeModifierV2 = ComputeStakeModifierV2(pindex->pprev, block.IsProofOfStake() ? block.vtx[1].vin[0].prevout.hash : block.GetHash());
 
     // Check difficulty
@@ -2485,17 +2497,6 @@ bool ConnectBlock(const CBlock& block, CValidationState& state, CBlockIndex* pin
                                  REJECT_INVALID, "bad-cs-proofhash");
     }
     */
-
-    if (block.IsProofOfStake()) {
-        const COutPoint &prevout = block.vtx[1].vin[0].prevout;
-        const CCoins *coins = view.AccessCoins(prevout.hash);
-        if (!coins)
-            return state.DoS(100, error("ConnectBlock() : kernel input unavailable"),
-                                REJECT_INVALID, "bad-cs-kernel");
-
-        if (!CheckProofOfStake(pindex->pprev, block.vtx[1], block.nBits, state))
-            return error("ConnectBlock() : check proof-of-stake signature failed for block %s", block.GetHash().GetHex());
-    }
 
     bool fScriptChecks = true;
     if (fCheckpointsEnabled) {
@@ -3778,6 +3779,7 @@ bool ContextualCheckBlock(const CBlock& block, CValidationState& state, CBlockIn
 
 bool CheckStake(CBlock* pblock, CWallet& wallet, const CChainParams& chainparams)
 {
+    uint256 hashProofOfStake = uint256();
     uint256 hashBlock = pblock->GetHash();
 
     if(!pblock->IsProofOfStake())
@@ -3785,7 +3787,7 @@ bool CheckStake(CBlock* pblock, CWallet& wallet, const CChainParams& chainparams
 
     CValidationState state;
     // verify hash target and signature of coinstake tx
-    if (!CheckProofOfStake(mapBlockIndex[pblock->hashPrevBlock], pblock->vtx[1], pblock->nBits, state))
+    if (!CheckProofOfStake(mapBlockIndex[pblock->hashPrevBlock], pblock->vtx[1], pblock->nBits, hashProofOfStake, state))
         return error("CheckStake() : proof-of-stake checking failed");
 
     //// debug print
@@ -5584,6 +5586,15 @@ bool static ProcessMessage(CNode* pfrom, string strCommand, CDataStream& vRecv, 
             if (pindex->GetBlockHash() == hashStop)
             {
                 LogPrint("net", "  getblocks stopping at %d %s\n", pindex->nHeight, pindex->GetBlockHash().ToString());
+
+                // Potcoin: only for PoSV1
+                if !(chainparams.GetConsensus().IsProtocolV3(chainActive.Tip()->GetBlockTime())) {
+                    // peercoin: tell downloading node about the latest block if it's
+                    // without risk being rejected due to stake connection check
+                    if (hashStop != chainActive.Tip()->GetBlockHash() && pindex->GetBlockTime() + chainparams.GetConsensus().nStakeMinAge > chainActive.Tip()->GetBlockTime())
+                        pfrom->PushInventory(CInv(MSG_BLOCK, chainActive.Tip()->GetBlockHash()));
+                }
+
                 break;
             }
             // If pruning, don't inv blocks unless we have on disk and are likely to still have

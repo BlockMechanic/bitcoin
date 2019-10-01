@@ -34,9 +34,17 @@ bool TransactionGetCoinAge(CTransaction& transaction, uint64_t& nCoinAge);
 
 // Check whether the coinstake timestamp meets protocol
 bool CheckCoinStakeTimestamp(int64_t nTimeBlock, int64_t nTimeTx);
+
 bool CheckStakeBlockTimestamp(int64_t nTimeBlock);
 bool CheckKernel(CBlockIndex* pindexPrev, unsigned int nBits, uint32_t nTime, const COutPoint& prevout);
-bool CheckStakeKernelHash(const CBlockIndex* pindexPrev, unsigned int nBits, CBlockIndex& blockFrom, unsigned int nTxPrevOffset, const CTransaction& txPrev, const COutPoint& prevout, unsigned int nTimeTx, bool fPrintProofOfStake = false);
-bool CheckProofOfStake(CBlockIndex* pindexPrev, const CTransaction& tx, unsigned int nBits, CValidationState &state);
+
+// Check whether stake kernel meets hash target
+// Sets hashProofOfStake on success return
+bool CheckStakeKernelHash(const CBlockIndex* pindexPrev, unsigned int nBits, CBlockIndex& blockFrom, unsigned int nTxPrevOffset, const CTransaction& txPrev, const COutPoint& prevout, unsigned int nTimeTx, uint256& hashProofOfStake, bool fPrintProofOfStake = false);
+
+// Check kernel hash target and coinstake signature
+// Sets hashProofOfStake on success return
+bool CheckProofOfStake(CBlockIndex* pindexPrev, const CTransaction& tx, unsigned int nBits, uint256& hashProofOfStake, CValidationState &state);
+
 bool VerifySignature(const CTransaction& txFrom, const CTransaction& txTo, unsigned int nIn, unsigned int flags, int nHashType);
 #endif // BLACKCOIN_POS_H

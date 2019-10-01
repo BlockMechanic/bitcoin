@@ -180,15 +180,16 @@ static bool SelectBlockFromCandidates(vector<pair<int64_t, uint256> >& vSortedBy
             continue;
         // compute the selection hash by hashing its proof-hash and the
         // previous proof-of-stake modifier
+        uint256 hashProof = pindex->IsProofOfStake() ? pindex->hashProofOfStake : pindex->GetBlockHash();
         CDataStream ss(SER_GETHASH, 0);
-        ss << ArithToUint256(pindex->hashProof) << nStakeModifierPrev;
+        ss << hashProof << nStakeModifierPrev;
         uint256 hashSelection = Hash(ss.begin(), ss.end());
 
         // the selection hash is divided by 2**32 so that proof-of-stake block
         // is always favored over proof-of-work block. this is to preserve
         // the energy efficiency property
         if (pindex->IsProofOfStake())
-            hashSelection = ArithToUint256(UintToArith256(hashSelection) >> 32);
+            hashSelection >>= 32;
 
         if (fSelected && hashSelection < hashBest)
         {
@@ -376,7 +377,7 @@ uint256 ComputeStakeModifierV2(const CBlockIndex* pindexPrev, const uint256& ker
 //   quantities so as to generate blocks faster, degrading the system back into
 //   a proof-of-work situation.
 //
-bool CheckStakeKernelHashV1(unsigned int nBits, const CBlockIndex& blockFrom, unsigned int nTxPrevOffset, const CTransaction& txPrev, const COutPoint& prevout, unsigned int nTimeTx, bool fPrintProofOfStake)
+bool CheckStakeKernelHashV1(unsigned int nBits, const CBlockIndex& blockFrom, unsigned int nTxPrevOffset, const CTransaction& txPrev, const COutPoint& prevout, unsigned int nTimeTx, uint256& hashProofOfStake, bool fPrintProofOfStake)
 {
     unsigned int nTimeBlockFrom = blockFrom.GetBlockTime();
     unsigned int nTimeTxPrev = txPrev.nTime;
@@ -408,7 +409,7 @@ bool CheckStakeKernelHashV1(unsigned int nBits, const CBlockIndex& blockFrom, un
     ss << nStakeModifier;
 
     ss << nTimeBlockFrom << nTxPrevOffset << nTimeTxPrev << prevout.n << nTimeTx;
-    uint256 hashProofOfStake = Hash(ss.begin(), ss.end());
+    hashProofOfStake = Hash(ss.begin(), ss.end());
     if (fPrintProofOfStake)
     {
         LogPrintf("CheckStakeKernelHash() : using modifier 0x%016x at height=%d timestamp=%s for block from height=%d timestamp=%s\n",
@@ -459,7 +460,7 @@ bool CheckStakeKernelHashV1(unsigned int nBits, const CBlockIndex& blockFrom, un
 //   quantities so as to generate blocks faster, degrading the system back into
 //   a proof-of-work situation.
 //
-bool CheckStakeKernelHashV2(const CBlockIndex* pindexPrev, unsigned int nBits, const CTransaction& txPrev, const COutPoint& prevout, unsigned int nTimeTx, bool fPrintProofOfStake)
+bool CheckStakeKernelHashV2(const CBlockIndex* pindexPrev, unsigned int nBits, const CTransaction& txPrev, const COutPoint& prevout, unsigned int nTimeTx, uint256& hashProofOfStake, bool fPrintProofOfStake)
 {
     if (nTimeTx < txPrev.nTime)  // Transaction timestamp violation
         return error("CheckStakeKernelHash() : nTime violation");
@@ -507,16 +508,16 @@ bool CheckStakeKernelHashV2(const CBlockIndex* pindexPrev, unsigned int nBits, c
     return true;
 }
 
-bool CheckStakeKernelHash(const CBlockIndex* pindexPrev, unsigned int nBits, CBlockIndex& blockFrom, unsigned int nTxPrevOffset, const CTransaction& txPrev, const COutPoint& prevout, unsigned int nTimeTx, bool fPrintProofOfStake)
+bool CheckStakeKernelHash(const CBlockIndex* pindexPrev, unsigned int nBits, CBlockIndex& blockFrom, unsigned int nTxPrevOffset, const CTransaction& txPrev, const COutPoint& prevout, unsigned int nTimeTx, uint256& hashProofOfStake, bool fPrintProofOfStake)
 {
     if (Params().GetConsensus().IsProtocolV3(pindexPrev->nHeight + 1))
-        return CheckStakeKernelHashV2(pindexPrev, nBits, txPrev, prevout, nTimeTx, fPrintProofOfStake);
+        return CheckStakeKernelHashV2(pindexPrev, nBits, txPrev, prevout, nTimeTx, hashProofOfStake, fPrintProofOfStake);
     else
-        return CheckStakeKernelHashV1(nBits, blockFrom, nTxPrevOffset, txPrev, prevout, nTimeTx, fPrintProofOfStake);
+        return CheckStakeKernelHashV1(nBits, blockFrom, nTxPrevOffset, txPrev, prevout, nTimeTx, hashProofOfStake, fPrintProofOfStake);
 }
 
 // Check kernel hash target and coinstake signature
-bool CheckProofOfStake(CBlockIndex* pindexPrev, const CTransaction& tx, unsigned int nBits, CValidationState &state)
+bool CheckProofOfStake(CBlockIndex* pindexPrev, const CTransaction& tx, unsigned int nBits, uint256& hashProofOfStake, CValidationState &state)
 {
     if (!tx.IsCoinStake())
         return error("CheckProofOfStake() : called on non-coinstake %s", tx.GetHash().ToString());
@@ -548,7 +549,7 @@ bool CheckProofOfStake(CBlockIndex* pindexPrev, const CTransaction& tx, unsigned
 
     CBlockIndex* pblockindex = mapBlockIndex[hashBlock];
 
-    if (!CheckStakeKernelHash(pindexPrev, nBits, *pblockindex, txin.prevout.n, txPrev, txin.prevout, tx.nTime, fDebug))
+    if (!CheckStakeKernelHash(pindexPrev, nBits, *pblockindex, txin.prevout.n, txPrev, txin.prevout, tx.nTime, hashProofOfStake, fDebug))
        return state.DoS(1, error("CheckProofOfStake() : INFO: check kernel failed on coinstake %s", tx.GetHash().ToString())); // may occur during initial download or if behind on block chain sync
 
     return true;
@@ -570,7 +571,7 @@ bool VerifySignature(const CTransaction& txFrom, const CTransaction& txTo, unsig
 
 bool CheckKernel(CBlockIndex* pindexPrev, unsigned int nBits, uint32_t nTime, const COutPoint& prevout)
 {
-    uint256 hashProofOfStake, targetProofOfStake;
+    uint256 hashProofOfStake;
 
     CTransaction txPrev;
     uint256 hashBlock = uint256();
@@ -591,5 +592,5 @@ bool CheckKernel(CBlockIndex* pindexPrev, unsigned int nBits, uint32_t nTime, co
 
     CBlockIndex* pblockindex = mapBlockIndex[hashBlock];
 
-    return CheckStakeKernelHash(pindexPrev, nBits, *pblockindex, txin.prevout.n, txPrev, prevout, nTime);
+    return CheckStakeKernelHash(pindexPrev, nBits, *pblockindex, txin.prevout.n, txPrev, prevout, nTime, hashProofOfStake);
 }

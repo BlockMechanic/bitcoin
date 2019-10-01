@@ -601,7 +601,8 @@ void CWallet::AvailableCoinsForStaking(std::vector<COutput>& vCoins) const
             if (nDepth < 1)
                 continue;
 
-            if (nDepth < Params().GetConsensus().nCoinbaseMaturity)
+            // Potcoin
+            if (nDepth < Params().GetConsensus().nCoinbaseMaturity + 20)
                 continue;
 
             if (pcoin->GetBlocksToMaturity() > 0)
@@ -3617,7 +3618,7 @@ uint64_t CWallet::GetStakeWeight() const
         // Weight is greater than zero
         if (nTimeWeight > 0)
         {
-            nTotalWeight += ArithToUint256(bnCoinDayWeight);
+            nTotalWeight += bnCoinDayWeight.GetLow64();
             nWeightCount++;
         }
 
@@ -4137,10 +4138,11 @@ int CMerkleTx::GetBlocksToMaturity() const
         return 0;
 
     // Potcoin
-    if (GetHeightInMainChain() >= Params().GetConsensus().nCoinbaseMaturitySwitch)
-        return max(0, (Params().GetConsensus().nCoinbaseMaturityNEW + 20) - GetDepthInMainChain());
+    const Consensus::Params& consensusParams = Params().GetConsensus();
+    if (GetHeightInMainChain() >= consensusParams.nCoinbaseMaturitySwitch)
+        return max(0, (consensusParams.nCoinbaseMaturityNEW + 20) - GetDepthInMainChain());
     else
-        return max(0, (Params().GetConsensus().nCoinbaseMaturity + 20) - GetDepthInMainChain());
+        return max(0, (consensusParams.nCoinbaseMaturity + 20) - GetDepthInMainChain());
 }
 
 

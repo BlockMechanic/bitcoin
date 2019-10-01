@@ -106,7 +106,7 @@ public:
 
         consensus.nLastPOWBlock = 974999;
         consensus.nStakeTimestampMask = 0xf; // 15
-        consensus.nCoinbaseMaturity = 30; // Potcoin: 30 blocks
+        consensus.nCoinbaseMaturity = 5; // Potcoin: 5 blocks
         consensus.nCoinbaseMaturityNEW = 60 * 4; // Potcoin: coinbase maturity after block 145000 - 240 blocks
         consensus.nStakeMinAge = 8 * 60 * 60; // Potcoin: 8 hours
         consensus.nStakeMaxAge = 365 * 24 * 60 * 60; // Potcoin: 365 days
@@ -209,8 +209,8 @@ public:
 
         consensus.nLastPOWBlock = 1000;
         consensus.nStakeTimestampMask = 0xf;
-        consensus.nCoinbaseMaturity = 10;
-        consensus.nCoinbaseMaturityNEW = 10;
+        consensus.nCoinbaseMaturity = 5;
+        consensus.nCoinbaseMaturityNEW = 5;
         consensus.nStakeMinAge = 1 * 60 * 60;
         consensus.nStakeMaxAge = 365 * 24 * 60 * 60;
 
@@ -359,8 +359,8 @@ public:
 
         consensus.nLastPOWBlock = 1000;
         consensus.nStakeTimestampMask = 0xf;
-        consensus.nCoinbaseMaturity = 10;
-        consensus.nCoinbaseMaturityNEW = 10;
+        consensus.nCoinbaseMaturity = 5;
+        consensus.nCoinbaseMaturityNEW = 5;
         consensus.nStakeMinAge = 1 * 60 * 60;
         consensus.nStakeMaxAge = 365 * 24 * 60 * 60;
 
