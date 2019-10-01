@@ -2465,6 +2465,7 @@ bool ConnectBlock(const CBlock& block, CValidationState& state, CBlockIndex* pin
          return state.DoS(100, error("ConnectBlock(): incorrect difficulty"),
                         REJECT_INVALID, "bad-diffbits");
 
+    /*
     // Check proof-of-stake
     if (block.IsProofOfStake() && chainparams.GetConsensus().IsProtocolV3(block.GetBlockTime())) {
          const COutPoint &prevout = block.vtx[1].vin[0].prevout;
@@ -2482,6 +2483,18 @@ bool ConnectBlock(const CBlock& block, CValidationState& state, CBlockIndex* pin
          if (!CheckStakeKernelHash(pindex->pprev, block.nBits, coins, prevout, block.vtx[1].nTime))
               return state.DoS(100, error("ConnectBlock(): proof-of-stake hash doesn't match nBits"),
                                  REJECT_INVALID, "bad-cs-proofhash");
+    }
+    */
+
+    if (block.IsProofOfStake()) {
+        const COutPoint &prevout = block.vtx[1].vin[0].prevout;
+        const CCoins *coins = view.AccessCoins(prevout.hash);
+        if (!coins)
+            return state.DoS(100, error("ConnectBlock() : kernel input unavailable"),
+                                REJECT_INVALID, "bad-cs-kernel");
+
+        if (!CheckProofOfStake(pindex->pprev, block.vtx[1], block.nBits, state))
+            return error("ConnectBlock() : check proof-of-stake signature failed for block %s", block.GetHash().GetHex());
     }
 
     bool fScriptChecks = true;

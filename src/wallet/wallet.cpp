@@ -3,9 +3,6 @@
 // Distributed under the MIT software license, see the accompanying
 // file COPYING or http://www.opensource.org/licenses/mit-license.php.
 
-// Stake cache by Qtum
-// Copyright (c) 2016-2018 The Qtum developers
-
 #include "wallet/wallet.h"
 
 #include "chain.h"
@@ -47,7 +44,8 @@ bool fSendFreeTransactions = DEFAULT_SEND_FREE_TRANSACTIONS;
 const char * DEFAULT_WALLET_DAT = "wallet.dat";
 const uint32_t BIP32_HARDENED_KEY_LIMIT = 0x80000000;
 
-static int64_t GetStakeCombineThreshold() { return 2000000 * COIN; } // Potcoin
+static unsigned int nStakeSplitAge = 45 * 24 * 60 * 60; // 45 days
+static int64_t GetStakeCombineThreshold() { return 2000000 * COIN; }
 static int64_t GetStakeSplitThreshold() { return 2 * GetStakeCombineThreshold(); }
 
 /**
@@ -703,27 +701,33 @@ bool CWallet::CreateCoinStake(const CKeyStore& keystore, unsigned int nBits, int
     if (setCoins.empty())
         return false;
 
-    if (stakeCache.size() > setCoins.size() + 100){
-        //Determining if the cache is still valid is harder than just clearing it when it gets too big, so instead just clear it
-        //when it has more than 100 entries more than the actual setCoins.
-        stakeCache.clear();
-    }
-
-    if (GetBoolArg("-stakecache", DEFAULT_STAKE_CACHE)) {
-        BOOST_FOREACH(const PAIRTYPE(const CWalletTx*, unsigned int)& pcoin, setCoins)
-        {
-            boost::this_thread::interruption_point();
-            COutPoint prevoutStake = COutPoint(pcoin.first->GetHash(), pcoin.second);
-            CacheKernel(stakeCache, prevoutStake, pindexPrev); //this will do a 2 disk loads per op
-        }
-
-    }
-
     int64_t nCredit = 0;
     CScript scriptPubKeyKernel;
     BOOST_FOREACH(const PAIRTYPE(const CWalletTx*, unsigned int)& pcoin, setCoins)
     {
+        CTransaction tx;
+        uint256 hashBlock = 0;
+        {
+        LOCK2(cs_main, cs_wallet);
+            if (!GetTransaction(pcoin.first->GetHash(), tx, hashBlock, true))
+                continue;
+        }
+
+        // Read block header
+        if (!mapBlockIndex.count(hashBlock))
+            continue;
+
+        CBlock block;
+        {
+            LOCK2(cs_main, cs_wallet);
+            if (!block.ReadFromDisk(mapBlockIndex[hashBlock]))
+                continue;
+        }
+
         static int nMaxStakeSearchInterval = 60;
+        if (block.GetBlockTime() + Params().GetConsensus().nStakeMinAge > txNew.nTime - nMaxStakeSearchInterval)
+            continue; // only count coins meeting min age requirement
+
         bool fKernelFound = false;
         for (unsigned int n=0; n<min(nSearchInterval,(int64_t)nMaxStakeSearchInterval) && !fKernelFound && pindexPrev == pindexBestHeader; n++)
         {
@@ -731,7 +735,7 @@ bool CWallet::CreateCoinStake(const CKeyStore& keystore, unsigned int nBits, int
             // Search backward in time from the given txNew timestamp
             // Search nSearchInterval seconds back up to nMaxStakeSearchInterval
             COutPoint prevoutStake = COutPoint(pcoin.first->GetHash(), pcoin.second);
-            if (CheckKernel(pindexPrev, nBits, txNew.nTime - n, prevoutStake, stakeCache))
+            if (CheckKernel(pindexPrev, nBits, txNew.nTime - n, prevoutStake))
             {
                 // Found a kernel
                 LogPrint("coinstake", "CreateCoinStake : kernel found\n");
@@ -785,6 +789,9 @@ bool CWallet::CreateCoinStake(const CKeyStore& keystore, unsigned int nBits, int
                 vwtxPrev.push_back(pcoin.first);
                 txNew.vout.push_back(CTxOut(0, scriptPubKeyOut));
 
+                if (GetCoinAgeWeight(block.GetBlockTime(), (int64_t)txNew.nTime) < nStakeSplitAge && nCredit >= GetStakeCombineThreshold())
+                    txNew.vout.push_back(CTxOut(0, scriptPubKeyOut)); //split stake
+
                 LogPrint("coinstake", "CreateCoinStake : added kernel type=%d\n", whichType);
                 fKernelFound = true;
                 break;
@@ -816,6 +823,23 @@ bool CWallet::CreateCoinStake(const CKeyStore& keystore, unsigned int nBits, int
                 break;
             // Do not add additional significant input
             if (pcoin.first->vout[pcoin.second].nValue >= GetStakeCombineThreshold())
+                continue;
+
+            CTransaction tx;
+            uint256 hashBlock = 0;
+            {
+                LOCK2(cs_main, cs_wallet);
+                if (!GetTransaction(pcoin.first->GetHash(), tx, hashBlock, true))
+                    continue;
+                if (!mapBlockIndex.count(hashBlock))
+                    continue;
+            }
+
+            // Deal with transaction timestmap
+            unsigned int nTimeTx = tx.nTime ? tx.nTime : mapBlockIndex[hashBlock]->nTime;
+
+            // Do not add input that is still too young
+            if (!GetCoinAgeWeight((int64_t)nTimeTx, (int64_t)txNew.nTime))
                 continue;
 
             txNew.vin.push_back(CTxIn(pcoin.first->GetHash(), pcoin.second));
@@ -3565,16 +3589,52 @@ uint64_t CWallet::GetStakeWeight() const
     if (setCoins.empty())
         return 0;
 
-    uint64_t nWeight = 0;
+    // PoSV3
+    // uint64_t nWeight = 0;
+    uint64_t nAverageWeight = 0;
+    uint64_t nTotalWeight = 0;
+    uint64_t nWeightCount = 0;
 
     LOCK2(cs_main, cs_wallet);
     BOOST_FOREACH(PAIRTYPE(const CWalletTx*, unsigned int) pcoin, setCoins)
     {
+        CTransaction tx;
+        uint256 hashBlock = 0;
+        {
+            LOCK2(cs_main, cs_wallet);
+            if (!GetTransaction(pcoin.first->GetHash(), tx, hashBlock, true))
+                continue;
+            if (!mapBlockIndex.count(hashBlock))
+                continue;
+        }
+
+        // Deal with transaction timestmap
+        unsigned int nTimeTx = tx.nTime ? tx.nTime : mapBlockIndex[hashBlock]->nTime;
+
+        int64_t nTimeWeight = GetCoinAgeWeight((int64_t)nTimeTx, (int64_t)GetTime());
+        arith_uint256 bnCoinDayWeight = arith_uint256(pcoin.first->vout[pcoin.second].nValue) * nTimeWeight / COIN / (24 * 60 * 60);
+
+        // Weight is greater than zero
+        if (nTimeWeight > 0)
+        {
+            nTotalWeight += ArithToUint256(bnCoinDayWeight);
+            nWeightCount++;
+        }
+
+        /*
+        // PoSV3
 		if (pcoin.first->GetDepthInMainChain() >= Params().GetConsensus().nCoinbaseMaturity)
 			nWeight += pcoin.first->vout[pcoin.second].nValue;
+        */
     }
 
-    return nWeight;
+    if (nWeightCount > 0)
+        nAverageWeight = nTotalWeight / nWeightCount;
+
+    return nAverageWeight;
+
+    // PoSV3
+    // return nWeight;
 }
 
 /** @} */ // end of Actions

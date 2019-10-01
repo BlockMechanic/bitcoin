@@ -331,12 +331,12 @@ unsigned int GetNextTargetRequired(const CBlockIndex* pindexLast, const CBlockHe
     }
 
     // Newest mode for PoSV3
-	if (params.IsProtocolV3(pindexLast->GetBlockTime()))
-		return CalculateNextTargetRequired(pindexPrev, pindexPrevPrev->GetBlockTime(), params, fProofOfStake);
+    if (params.IsProtocolV3(pindexLast->GetBlockTime()))
+        return CalculateNextTargetRequired(pindexPrev, pindexPrevPrev->GetBlockTime(), params, fProofOfStake);
 
-	// New mode for PoS
-	if (pindexLast->nHeight >= params.nLastPOWBlock)
-		return GetPoSV1Difficulty(pindexLast, params, pblock); 
+    // New mode for PoS
+    if (pindexLast->nHeight >= params.nLastPOWBlock)
+        return GetPoSV1Difficulty(pindexLast, params, pblock); 
 
     int DiffMode = 1;
     if (pindexLast->nHeight + 1 >= params.nDifficultyKGW)
