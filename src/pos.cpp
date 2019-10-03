@@ -571,10 +571,10 @@ bool VerifySignature(const CTransaction& txFrom, const CTransaction& txTo, unsig
 
 bool CheckKernel(CBlockIndex* pindexPrev, unsigned int nBits, uint32_t nTime, const COutPoint& prevout)
 {
-    uint256 hashProofOfStake;
-
     CTransaction txPrev;
     uint256 hashBlock = uint256();
+    uint256 hashProofOfStake = uint256();
+
     if (!GetTransaction(prevout.hash, txPrev, Params().GetConsensus(), hashBlock, true)){
         LogPrintf("CheckKernel() : could not find previous transaction %s\n", prevout.hash.ToString());
         return false;

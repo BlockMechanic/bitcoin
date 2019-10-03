@@ -1252,14 +1252,14 @@ bool AcceptToMemoryPoolWorker(CTxMemPool& pool, CValidationState& state, const C
         return state.DoS(100, false, REJECT_INVALID, "coinstake");
 
     // Potcoin: refuse transactions with old versions
-    const CChainParams& chainparams = Params();
-    if (chainActive.Height() >= chainparams.GetConsensus().nLastPOWBlock && tx.nVersion <= 3)
+    const Consensus::Params& consensusParams = Params().GetConsensus();
+    if (chainActive.Height() >= consensusParams.nLastPOWBlock && tx.nVersion <= 3)
         return state.DoS(100, false, REJECT_INVALID, "old-pre-PoSV-version-tx");
 
     // Don't relay version 5 transactions until CSV is active, and we can be
     // sure that such transactions will be mined (unless we're on
     // -testnet/-regtest).
-    if (fRequireStandard && tx.nVersion >= 5 && !(chainparams.GetConsensus().IsProtocolV3(chainActive.Tip()->GetBlockTime()))) {
+    if (fRequireStandard && tx.nVersion >= 5 && (!consensusParams.IsProtocolV3(chainActive.Tip()->GetBlockTime())) {
         return state.DoS(0, false, REJECT_NONSTANDARD, "premature-version5-tx");
     }
 
@@ -3839,13 +3839,20 @@ bool SignBlock(CBlock& block, CWallet& wallet, int64_t& nFees)
     txCoinStake.nTime = GetAdjustedTime();
     txCoinStake.nTime &= ~Params().GetConsensus().nStakeTimestampMask;
 
+    int64_t nMinTime;
     int64_t nSearchTime = txCoinStake.nTime; // search to current time
 
     if (nSearchTime > nLastCoinStakeSearchTime)
     {
         if (wallet.CreateCoinStake(wallet, block.nBits, 1, nFees, txCoinStake, key))
         {
-            if (txCoinStake.nTime >= pindexBestHeader->GetPastTimeLimit()+1)
+            // Potcoin
+            if (Params().GetConsensus().IsProtocolV3(GetAdjustedTime()))
+                nMinTime = pindexBestHeader->GetPastTimeLimit()+1;
+            else
+                nMinTime = max(pindexBestHeader->GetPastTimeLimit()+1, PastDrift(pindexBestHeader->GetBlockTime()));
+
+            if (txCoinStake.nTime >= nMinTime)
             {
                 // make sure coinstake would meet timestamp protocol
                 // as it would be the same as the block timestamp

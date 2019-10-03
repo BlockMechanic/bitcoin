@@ -183,8 +183,11 @@ CBlockTemplate* BlockAssembler::CreateNewBlock(const CScript& scriptPubKeyIn, in
     // Fill in header
     pblock->hashPrevBlock  = pindexPrev->GetBlockHash();
     pblock->nTime = max(pindexPrev->GetPastTimeLimit()+1, GetMaxTransactionTime(pblock));
-    if (!fProofOfStake)
+    // Potcoin: update block time
+    if (!chainparams.GetConsensus().IsProtocolV3(pblock->GetBlockTime())) {
+        pblock->nTime = max(pblock->GetBlockTime(), PastDrift(pindexPrev->GetBlockTime()));
         UpdateTime(pblock, chainparams.GetConsensus(), pindexPrev);
+    }
     pblock->nBits          = GetNextTargetRequired(pindexPrev, pblock, chainparams.GetConsensus(), fProofOfStake);
     pblock->nNonce         = 0;
     pblocktemplate->vTxSigOpsCost[0] = GetSigOpCountWithoutP2SH(pblock->vtx[0]);

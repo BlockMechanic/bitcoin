@@ -1159,6 +1159,10 @@ bool CWallet::AddToWallet(const CWalletTx& wtxIn, bool fFromLoadWallet, CWalletD
 
                     int64_t blocktime = mapBlockIndex[wtxIn.hashBlock]->GetBlockTime();
                     wtx.nTimeSmart = std::max(latestEntry, std::min(blocktime, latestNow));
+
+                    // PoSV: for old transactions, set the nTime to block time
+                    if (wtx.nTime == 0)
+                        wtx.nTime = blocktime;
                 }
                 else
                     LogPrintf("AddToWallet(): found %s in block %s not in index\n",
