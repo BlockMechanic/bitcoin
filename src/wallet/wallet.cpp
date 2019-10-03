@@ -704,29 +704,26 @@ bool CWallet::CreateCoinStake(const CKeyStore& keystore, unsigned int nBits, int
 
     int64_t nCredit = 0;
     CScript scriptPubKeyKernel;
-    BOOST_FOREACH(const PAIRTYPE(const CWalletTx*, unsigned int)& pcoin, setCoins)
+    for (const auto& pcoin : setCoins)
     {
-        CTransaction tx;
-        uint256 hashBlock = 0;
-        {
-        LOCK2(cs_main, cs_wallet);
-            if (!GetTransaction(pcoin.first->GetHash(), tx, hashBlock, true))
-                continue;
-        }
-
-        // Read block header
-        if (!mapBlockIndex.count(hashBlock))
+        CDiskTxPos postx;
+        if (!pblocktree->ReadTxIndex(pcoin.outpoint.hash, postx))
             continue;
 
-        CBlock block;
-        {
-            LOCK2(cs_main, cs_wallet);
-            if (!block.ReadFromDisk(mapBlockIndex[hashBlock]))
-                continue;
+        // Read block header
+        CAutoFile file(OpenBlockFile(postx, true), SER_DISK, CLIENT_VERSION);
+        CBlockHeader header;
+        CTransaction tx;
+        try {
+            file >> header;
+            fseek(file.Get(), postx.nTxOffset, SEEK_CUR);
+            file >> tx;
+        } catch (std::exception &e) {
+            return error("%s() : deserialize or I/O error in CreateCoinStake()", __PRETTY_FUNCTION__);
         }
 
         static int nMaxStakeSearchInterval = 60;
-        if (block.GetBlockTime() + Params().GetConsensus().nStakeMinAge > txNew.nTime - nMaxStakeSearchInterval)
+        if (header.GetBlockTime() + Params().GetConsensus().nStakeMinAge > txNew.nTime - nMaxStakeSearchInterval)
             continue; // only count coins meeting min age requirement
 
         bool fKernelFound = false;
@@ -807,8 +804,24 @@ bool CWallet::CreateCoinStake(const CKeyStore& keystore, unsigned int nBits, int
     if (nCredit == 0 || nCredit > nBalance - nReserveBalance)
         return false;
 
-    BOOST_FOREACH(const PAIRTYPE(const CWalletTx*, unsigned int)& pcoin, setCoins)
+    for (const auto& pcoin : setCoins)
     {
+        CDiskTxPos postx;
+        if (!pblocktree->ReadTxIndex(pcoin.outpoint.hash, postx))
+            continue;
+
+        // Read block header
+        CAutoFile file(OpenBlockFile(postx, true), SER_DISK, CLIENT_VERSION);
+        CBlockHeader header;
+        CTransaction tx;
+        try {
+            file >> header;
+            fseek(file.Get(), postx.nTxOffset, SEEK_CUR);
+            file >> tx;
+        } catch (std::exception &e) {
+            return error("%s() : deserialize or I/O error in CreateCoinStake()", __PRETTY_FUNCTION__);
+        }
+
         // Attempt to add more inputs
         // Only add coins of the same key/address as kernel
         if (txNew.vout.size() == 2 && ((pcoin.first->vout[pcoin.second].scriptPubKey == scriptPubKeyKernel || pcoin.first->vout[pcoin.second].scriptPubKey == txNew.vout[1].scriptPubKey))
@@ -827,18 +840,8 @@ bool CWallet::CreateCoinStake(const CKeyStore& keystore, unsigned int nBits, int
             if (pcoin.first->vout[pcoin.second].nValue >= GetStakeCombineThreshold())
                 continue;
 
-            CTransaction tx;
-            uint256 hashBlock = 0;
-            {
-                LOCK2(cs_main, cs_wallet);
-                if (!GetTransaction(pcoin.first->GetHash(), tx, hashBlock, true))
-                    continue;
-                if (!mapBlockIndex.count(hashBlock))
-                    continue;
-            }
-
-            // Deal with transaction timestmap
-            unsigned int nTimeTx = tx.nTime ? tx.nTime : mapBlockIndex[hashBlock]->nTime;
+            // Deal with transaction timestamp
+            unsigned int nTimeTx = tx.nTime ? tx.nTime : header.GetBlockTime();
 
             // Do not add input that is still too young
             if (!GetCoinAgeWeight((int64_t)nTimeTx, (int64_t)txNew.nTime))
@@ -3602,20 +3605,26 @@ uint64_t CWallet::GetStakeWeight() const
     uint64_t nWeightCount = 0;
 
     LOCK2(cs_main, cs_wallet);
-    BOOST_FOREACH(PAIRTYPE(const CWalletTx*, unsigned int) pcoin, setCoins)
+    for (const auto& pcoin : setCoins)
     {
+        CDiskTxPos postx;
+        if (!pblocktree->ReadTxIndex(pcoin.outpoint.hash, postx))
+            continue;
+
+        // Read block header
+        CAutoFile file(OpenBlockFile(postx, true), SER_DISK, CLIENT_VERSION);
+        CBlockHeader header;
         CTransaction tx;
-        uint256 hashBlock = 0;
-        {
-            LOCK2(cs_main, cs_wallet);
-            if (!GetTransaction(pcoin.first->GetHash(), tx, hashBlock, true))
-                continue;
-            if (!mapBlockIndex.count(hashBlock))
-                continue;
+        try {
+            file >> header;
+            fseek(file.Get(), postx.nTxOffset, SEEK_CUR);
+            file >> tx;
+        } catch (std::exception &e) {
+            return error("%s() : deserialize or I/O error in CreateCoinStake()", __PRETTY_FUNCTION__);
         }
 
         // Deal with transaction timestmap
-        unsigned int nTimeTx = tx.nTime ? tx.nTime : mapBlockIndex[hashBlock]->nTime;
+        unsigned int nTimeTx = tx.nTime ? tx.nTime : header.GetBlockTime();
 
         int64_t nTimeWeight = GetCoinAgeWeight((int64_t)nTimeTx, (int64_t)GetTime());
         arith_uint256 bnCoinDayWeight = arith_uint256(pcoin.first->vout[pcoin.second].nValue) * nTimeWeight / COIN / (24 * 60 * 60);
