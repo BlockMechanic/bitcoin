@@ -62,7 +62,7 @@ int64_t GetCoinAgeWeight(int64_t nIntervalBeginning, int64_t nIntervalEnd)
 {
     if (nIntervalBeginning <= 0)
     {
-        printf("WARNING *** GetCoinAgeWeight: nIntervalBeginning (0x%016x) <= 0\n", nIntervalBeginning);
+        printf("WARNING *** GetCoinAgeWeight: nIntervalBeginning (0x%016lx) <= 0\n", nIntervalBeginning);
         return 0;
     }
 
@@ -164,9 +164,9 @@ static bool SelectBlockFromCandidates(vector<pair<int64_t, uint256> >& vSortedBy
     int64_t nSelectionIntervalStop, uint64_t nStakeModifierPrev, const CBlockIndex** pindexSelected)
 {
     bool fSelected = false;
-    uint256 hashBest = uint256();
+    arith_uint256 hashBest = 0;
     *pindexSelected = (const CBlockIndex*) 0;
-    BOOST_FOREACH(const PAIRTYPE(int64_t, uint256)& item, vSortedByTimestamp)
+    for (const auto& item : vSortedByTimestamp)
     {
         if (!mapBlockIndex.count(item.second))
             return error("SelectBlockFromCandidates: failed to find block index for candidate block %s", item.second.ToString());
@@ -183,7 +183,7 @@ static bool SelectBlockFromCandidates(vector<pair<int64_t, uint256> >& vSortedBy
         uint256 hashProof = pindex->IsProofOfStake() ? pindex->hashProofOfStake : pindex->GetBlockHash();
         CDataStream ss(SER_GETHASH, 0);
         ss << hashProof << nStakeModifierPrev;
-        uint256 hashSelection = Hash(ss.begin(), ss.end());
+        arith_uint256 hashSelection = UintToArith256(Hash(ss.begin(), ss.end()));
 
         // the selection hash is divided by 2**32 so that proof-of-stake block
         // is always favored over proof-of-work block. this is to preserve
@@ -377,7 +377,7 @@ uint256 ComputeStakeModifierV2(const CBlockIndex* pindexPrev, const uint256& ker
 //   quantities so as to generate blocks faster, degrading the system back into
 //   a proof-of-work situation.
 //
-bool CheckStakeKernelHashV1(unsigned int nBits, const CBlockIndex& blockFrom, unsigned int nTxPrevOffset, const CTransaction& txPrev, const COutPoint& prevout, unsigned int nTimeTx, uint256& hashProofOfStake, bool fPrintProofOfStake)
+bool CheckStakeKernelHashV1(unsigned int nBits, const CBlockHeader& blockFrom, unsigned int nTxPrevOffset, const CTransaction& txPrev, const COutPoint& prevout, unsigned int nTimeTx, uint256& hashProofOfStake, bool fPrintProofOfStake)
 {
     unsigned int nTimeBlockFrom = blockFrom.GetBlockTime();
     unsigned int nTimeTxPrev = txPrev.nTime;
@@ -388,9 +388,6 @@ bool CheckStakeKernelHashV1(unsigned int nBits, const CBlockIndex& blockFrom, un
 
     if (nTimeTx < nTimeTxPrev)  // Transaction timestamp violation
         return error("CheckStakeKernelHash() : nTime violation: nTimeTx < txPrev.nTime");
-
-    if (nTimeBlockFrom + Params().GetConsensus().nStakeMinAge > nTimeTx) // Min age requirement
-        return error("CheckStakeKernelHash() : min age violation");
 
     arith_uint256 bnTargetPerCoinDay;
     bnTargetPerCoinDay.SetCompact(nBits);
@@ -483,23 +480,23 @@ bool CheckStakeKernelHashV2(const CBlockIndex* pindexPrev, unsigned int nBits, c
     ss << nStakeModifierV2;
     ss << txPrev.nTime << prevout.hash << prevout.n << nTimeTx;
 
-    uint256 hashProofOfStake = ss.GetHash();
+    arith_uint256 hashProofOfStake = UintToArith256(Hash(ss.begin(), ss.end()));
 
     if (fPrintProofOfStake)
     {
-        LogPrintf("CheckStakeKernelHash() : nStakeModifierV2=%s, txPrev.nTime=%u, txPrev.vout.hash=%s, txPrev.vout.n=%u, nTime=%u, hashProof=%s\n",
+        LogPrintf("CheckStakeKernelHash() : nStakeModifierV2=%s, txPrev.nTime=%u, txPrev.vout.hash=%s, txPrev.vout.n=%u, nTime=%u, hashProofOfStake=%s\n",
             nStakeModifierV2.GetHex().c_str(),
             txPrev.nTime, prevout.hash.ToString(), prevout.n, nTimeTx,
             hashProofOfStake.ToString());
     }
 
     // Now check if proof-of-stake hash meets target protocol
-    if (UintToArith256(hashProofOfStake) > bnTarget)
+    if (hashProofOfStake > bnTarget)
         return false;
 
     if (fDebug && !fPrintProofOfStake)
     {
-        LogPrintf("CheckStakeKernelHash() : nStakeModifierV2=%s, txPrev.nTime=%u, txPrev.vout.hash=%s, txPrev.vout.n=%u, nTime=%u, hashProof=%s\n",
+        LogPrintf("CheckStakeKernelHash() : nStakeModifierV2=%s, txPrev.nTime=%u, txPrev.vout.hash=%s, txPrev.vout.n=%u, nTime=%u, hashProofOfStake=%s\n",
             nStakeModifierV2.GetHex().c_str(),
             txPrev.nTime, prevout.hash.ToString(), prevout.n, nTimeTx,
             hashProofOfStake.ToString());
@@ -508,9 +505,9 @@ bool CheckStakeKernelHashV2(const CBlockIndex* pindexPrev, unsigned int nBits, c
     return true;
 }
 
-bool CheckStakeKernelHash(const CBlockIndex* pindexPrev, unsigned int nBits, CBlockIndex& blockFrom, unsigned int nTxPrevOffset, const CTransaction& txPrev, const COutPoint& prevout, unsigned int nTimeTx, uint256& hashProofOfStake, bool fPrintProofOfStake)
+bool CheckStakeKernelHash(const CBlockIndex* pindexPrev, unsigned int nBits, CBlockHeader& blockFrom, unsigned int nTxPrevOffset, const CTransaction& txPrev, const COutPoint& prevout, unsigned int nTimeTx, uint256& hashProofOfStake, bool fPrintProofOfStake)
 {
-    if (Params().GetConsensus().IsProtocolV3(pindexPrev->nHeight + 1))
+    if (Params().GetConsensus().IsProtocolV3(pindexPrev->GetBlockTime()))
         return CheckStakeKernelHashV2(pindexPrev, nBits, txPrev, prevout, nTimeTx, hashProofOfStake, fPrintProofOfStake);
     else
         return CheckStakeKernelHashV1(nBits, blockFrom, nTxPrevOffset, txPrev, prevout, nTimeTx, hashProofOfStake, fPrintProofOfStake);
@@ -523,7 +520,28 @@ bool CheckProofOfStake(CBlockIndex* pindexPrev, const CTransaction& tx, unsigned
         return error("CheckProofOfStake() : called on non-coinstake %s", tx.GetHash().ToString());
 
     // Kernel (input 0) must match the stake hash target per coin age (nBits)
-    const CTxIn& txin = tx.vin[0];
+    const CTxIn& txin = tx->vin[0];
+
+    // Get transaction index for the previous transaction
+    CDiskTxPos postx;
+    if (!pblocktree->ReadTxIndex(txin.prevout.hash, postx))
+        return error("CheckProofOfStake() : tx index not found");  // tx index not found
+
+    // Read txPrev and header of its block
+    CBlockHeader header;
+    CTransaction txPrev2;
+    {
+        CAutoFile file(OpenBlockFile(postx, true), SER_DISK, CLIENT_VERSION);
+        try {
+            file >> header;
+            fseek(file.Get(), postx.nTxOffset, SEEK_CUR);
+            file >> txPrev2;
+        } catch (std::exception &e) {
+            return error("%s() : deserialize or I/O error in CheckProofOfStake()", __PRETTY_FUNCTION__);
+        }
+        if (txPrev2->GetHash() != txin.prevout.hash)
+            return error("%s() : txid mismatch in CheckProofOfStake()", __PRETTY_FUNCTION__);
+    }
 
     // First try finding the previous transaction in database
     CTransaction txPrev;
@@ -542,14 +560,19 @@ bool CheckProofOfStake(CBlockIndex* pindexPrev, const CTransaction& tx, unsigned
     if (!VerifySignature(txPrev, tx, 0, SCRIPT_VERIFY_NONE, 0))
        return state.DoS(100, error("CheckProofOfStake() : VerifySignature failed on coinstake %s", tx.GetHash().ToString()));
 
-    // Min age requirement
-    if (pindexPrev->nHeight + 1 - mapBlockIndex[hashBlock]->nHeight < Params().GetConsensus().nCoinbaseMaturity){
-        return state.DoS(100, error("CheckProofOfStake() : stake prevout is not mature, expecting %i and only matured to %i", Params().GetConsensus().nCoinbaseMaturity, pindexPrev->nHeight + 1 - mapBlockIndex[hashBlock]->nHeight));
-    }
-
     CBlockIndex* pblockindex = mapBlockIndex[hashBlock];
 
-    if (!CheckStakeKernelHash(pindexPrev, nBits, *pblockindex, txin.prevout.n, txPrev, txin.prevout, tx.nTime, hashProofOfStake, fDebug))
+    if (Params().GetConsensus().IsProtocolV3(tx.nTime)) {
+        if (pindexPrev->nHeight + 1 - pblockindex->nHeight < Params().GetConsensus().nCoinbaseMaturity){
+            return state.DoS(100, error("CheckProofOfStake() : stake prevout is not mature, expecting %i and only matured to %i", Params().GetConsensus().nCoinbaseMaturity, pindexPrev->nHeight + 1 - mapBlockIndex[hashBlock]->nHeight));
+        }
+    }
+    else {
+        if (pblockindex->GetBlockTime() + Params().GetConsensus().nStakeMinAge > nTime) {
+            return state.DoS(100, error("CheckProofOfStake() : only count coins meeting min age requirement, expecting %i and only matured to %i", Params().GetConsensus().nCoinbaseMaturity, pindexPrev->nHeight + 1 - mapBlockIndex[hashBlock]->nHeight));
+        }
+    }
+    if (!CheckStakeKernelHash(pindexPrev, nBits, header, postx.nTxOffset, txPrev, txin.prevout, tx.nTime, hashProofOfStake, fDebug))
        return state.DoS(1, error("CheckProofOfStake() : INFO: check kernel failed on coinstake %s", tx.GetHash().ToString())); // may occur during initial download or if behind on block chain sync
 
     return true;
@@ -569,11 +592,35 @@ bool VerifySignature(const CTransaction& txFrom, const CTransaction& txTo, unsig
     return VerifyScript(txin.scriptSig, txout.scriptPubKey, flags, TransactionSignatureChecker(&txTo, nIn, 0),  NULL);
 }
 
-bool CheckKernel(CBlockIndex* pindexPrev, unsigned int nBits, uint32_t nTime, const COutPoint& prevout)
+bool CheckKernel(CBlockIndex* pindexPrev, unsigned int nBits, uint32_t nTime, const COutPoint& prevout, int64_t* pBlockTime)
 {
     CTransaction txPrev;
     uint256 hashBlock = uint256();
     uint256 hashProofOfStake = uint256();
+
+    // Kernel (input 0) must match the stake hash target per coin age (nBits)
+    const CTxIn& txin = tx->vin[0];
+
+    // Get transaction index for the previous transaction
+    CDiskTxPos postx;
+    if (!pblocktree->ReadTxIndex(txin.prevout.hash, postx))
+        return error("CheckProofOfStake() : tx index not found");  // tx index not found
+
+    // Read txPrev and header of its block
+    CBlockHeader header;
+    CTransaction txPrev2;
+    {
+        CAutoFile file(OpenBlockFile(postx, true), SER_DISK, CLIENT_VERSION);
+        try {
+            file >> header;
+            fseek(file.Get(), postx.nTxOffset, SEEK_CUR);
+            file >> txPrev2;
+        } catch (std::exception &e) {
+            return error("%s() : deserialize or I/O error in CheckProofOfStake()", __PRETTY_FUNCTION__);
+        }
+        if (txPrev2->GetHash() != txin.prevout.hash)
+            return error("%s() : txid mismatch in CheckProofOfStake()", __PRETTY_FUNCTION__);
+    }
 
     if (!GetTransaction(prevout.hash, txPrev, Params().GetConsensus(), hashBlock, true)){
         LogPrintf("CheckKernel() : could not find previous transaction %s\n", prevout.hash.ToString());
@@ -585,12 +632,23 @@ bool CheckKernel(CBlockIndex* pindexPrev, unsigned int nBits, uint32_t nTime, co
         return false;
     }
 
-    if (pindexPrev->nHeight + 1 - mapBlockIndex[hashBlock]->nHeight < Params().GetConsensus().nCoinbaseMaturity){
-        LogPrintf("CheckKernel() : stake prevout is not mature in block %s\n", hashBlock.ToString());
-        return false;
-    }
-
     CBlockIndex* pblockindex = mapBlockIndex[hashBlock];
 
-    return CheckStakeKernelHash(pindexPrev, nBits, *pblockindex, txin.prevout.n, txPrev, prevout, nTime, hashProofOfStake);
+    if (Params().GetConsensus().IsProtocolV3(nTime)) {
+        if (pindexPrev->nHeight + 1 - pblockindex->nHeight < Params().GetConsensus().nCoinbaseMaturity){
+            LogPrintf("CheckKernel() : stake prevout is not mature in block %s\n", hashBlock.ToString());
+            return false;
+        }
+    }
+    else {
+        if (pblockindex->GetBlockTime() + Params().GetConsensus().nStakeMinAge > nTime) {
+            LogPrintf("CheckKernel() : only count coins meeting min age requirement, block %s\n", hashBlock.ToString());
+            return false;
+        }
+    }
+
+    if (pBlockTime)
+        *pBlockTime = pblockindex->GetBlockTime();
+
+    return CheckStakeKernelHash(pindexPrev, nBits, header, postx.nTxOffset, txPrev, prevout, nTime, hashProofOfStake);
 }

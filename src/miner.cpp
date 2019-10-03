@@ -183,7 +183,7 @@ CBlockTemplate* BlockAssembler::CreateNewBlock(const CScript& scriptPubKeyIn, in
     // Fill in header
     pblock->hashPrevBlock  = pindexPrev->GetBlockHash();
     pblock->nTime = max(pindexPrev->GetPastTimeLimit()+1, GetMaxTransactionTime(pblock));
-    // Potcoin: update block time
+    // Potcoin: only for PoW and PoSV
     if (!chainparams.GetConsensus().IsProtocolV3(pblock->GetBlockTime())) {
         pblock->nTime = max(pblock->GetBlockTime(), PastDrift(pindexPrev->GetBlockTime()));
         UpdateTime(pblock, chainparams.GetConsensus(), pindexPrev);

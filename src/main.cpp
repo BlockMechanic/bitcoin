@@ -1259,7 +1259,7 @@ bool AcceptToMemoryPoolWorker(CTxMemPool& pool, CValidationState& state, const C
     // Don't relay version 5 transactions until CSV is active, and we can be
     // sure that such transactions will be mined (unless we're on
     // -testnet/-regtest).
-    if (fRequireStandard && tx.nVersion >= 5 && (!consensusParams.IsProtocolV3(chainActive.Tip()->GetBlockTime())) {
+    if (fRequireStandard && tx.nVersion >= 5 && (!consensusParams.IsProtocolV3(chainActive.Tip()->GetBlockTime()))) {
         return state.DoS(0, false, REJECT_NONSTANDARD, "premature-version5-tx");
     }
 
@@ -5594,8 +5594,8 @@ bool static ProcessMessage(CNode* pfrom, string strCommand, CDataStream& vRecv, 
             {
                 LogPrint("net", "  getblocks stopping at %d %s\n", pindex->nHeight, pindex->GetBlockHash().ToString());
 
-                // Potcoin: only for PoSV1
-                if !(chainparams.GetConsensus().IsProtocolV3(chainActive.Tip()->GetBlockTime())) {
+                // Potcoin: only for PoSV
+                if (!chainparams.GetConsensus().IsProtocolV3(chainActive.Tip()->GetBlockTime())) {
                     // peercoin: tell downloading node about the latest block if it's
                     // without risk being rejected due to stake connection check
                     if (hashStop != chainActive.Tip()->GetBlockHash() && pindex->GetBlockTime() + chainparams.GetConsensus().nStakeMinAge > chainActive.Tip()->GetBlockTime())
