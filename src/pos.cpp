@@ -476,11 +476,11 @@ bool CheckStakeKernelHashV2(const CBlockIndex* pindexPrev, unsigned int nBits, c
     uint256 nStakeModifierV2 = pindexPrev->nStakeModifierV2;
 
     // Calculate hash
-    CHashWriter ss(SER_GETHASH, 0);
+    CDataStream ss(SER_GETHASH, 0);
     ss << nStakeModifierV2;
     ss << txPrev.nTime << prevout.hash << prevout.n << nTimeTx;
 
-    arith_uint256 hashProofOfStake = UintToArith256(Hash(ss.begin(), ss.end()));
+    hashProofOfStake = Hash(ss.begin(), ss.end());
 
     if (fPrintProofOfStake)
     {
@@ -491,7 +491,7 @@ bool CheckStakeKernelHashV2(const CBlockIndex* pindexPrev, unsigned int nBits, c
     }
 
     // Now check if proof-of-stake hash meets target protocol
-    if (hashProofOfStake > bnTarget)
+    if (UintToArith256(hashProofOfStake) > bnTarget)
         return false;
 
     if (fDebug && !fPrintProofOfStake)
@@ -520,7 +520,7 @@ bool CheckProofOfStake(CBlockIndex* pindexPrev, const CTransaction& tx, unsigned
         return error("CheckProofOfStake() : called on non-coinstake %s", tx.GetHash().ToString());
 
     // Kernel (input 0) must match the stake hash target per coin age (nBits)
-    const CTxIn& txin = tx->vin[0];
+    const CTxIn& txin = tx.vin[0];
 
     // Get transaction index for the previous transaction
     CDiskTxPos postx;
@@ -539,7 +539,7 @@ bool CheckProofOfStake(CBlockIndex* pindexPrev, const CTransaction& tx, unsigned
         } catch (std::exception &e) {
             return error("%s() : deserialize or I/O error in CheckProofOfStake()", __PRETTY_FUNCTION__);
         }
-        if (txPrev2->GetHash() != txin.prevout.hash)
+        if (txPrev2.GetHash() != txin.prevout.hash)
             return error("%s() : txid mismatch in CheckProofOfStake()", __PRETTY_FUNCTION__);
     }
 
@@ -568,7 +568,7 @@ bool CheckProofOfStake(CBlockIndex* pindexPrev, const CTransaction& tx, unsigned
         }
     }
     else {
-        if (pblockindex->GetBlockTime() + Params().GetConsensus().nStakeMinAge > nTime) {
+        if (pblockindex->GetBlockTime() + Params().GetConsensus().nStakeMinAge > tx.nTime) {
             return state.DoS(100, error("CheckProofOfStake() : only count coins meeting min age requirement, expecting %i and only matured to %i", Params().GetConsensus().nCoinbaseMaturity, pindexPrev->nHeight + 1 - mapBlockIndex[hashBlock]->nHeight));
         }
     }
@@ -598,12 +598,9 @@ bool CheckKernel(CBlockIndex* pindexPrev, unsigned int nBits, uint32_t nTime, co
     uint256 hashBlock = uint256();
     uint256 hashProofOfStake = uint256();
 
-    // Kernel (input 0) must match the stake hash target per coin age (nBits)
-    const CTxIn& txin = tx->vin[0];
-
     // Get transaction index for the previous transaction
     CDiskTxPos postx;
-    if (!pblocktree->ReadTxIndex(txin.prevout.hash, postx))
+    if (!pblocktree->ReadTxIndex(prevout.hash, postx))
         return error("CheckProofOfStake() : tx index not found");  // tx index not found
 
     // Read txPrev and header of its block
@@ -618,7 +615,7 @@ bool CheckKernel(CBlockIndex* pindexPrev, unsigned int nBits, uint32_t nTime, co
         } catch (std::exception &e) {
             return error("%s() : deserialize or I/O error in CheckProofOfStake()", __PRETTY_FUNCTION__);
         }
-        if (txPrev2->GetHash() != txin.prevout.hash)
+        if (txPrev2.GetHash() != prevout.hash)
             return error("%s() : txid mismatch in CheckProofOfStake()", __PRETTY_FUNCTION__);
     }
 
