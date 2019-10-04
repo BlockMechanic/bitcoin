@@ -224,6 +224,7 @@ public:
         nDefaultPort = 14200;
         nPruneAfterHeight = 1000;
 
+        /*
         // const char* pszTimestamp = "Banks Aren't Accepting Legal Marijuana Money. Here's Why";
         // CMutableTransaction txNew;
         // txNew.nTime = 1548266025;
@@ -284,7 +285,12 @@ public:
         // printf ("Bitcoin testnet hashMerkleRoot: %s \n", genesis.hashMerkleRoot.ToString().c_str());
         // assert(consensus.hashGenesisBlock == uint256S("0xa52b24891756af34d415268c675895c8399b3740633cbd815e8bfc96a3fabe69"));
         // assert(genesis.hashMerkleRoot == uint256S("0x851d98e776092bfcfe4a9403b2430492f39cd36c037488134144adfe41430fbc"));
+        */
 
+        genesis = CreateGenesisBlock(1548795387, 318662, 0x1f00ffff, 1, 0);
+        consensus.hashGenesisBlock = genesis.GetHash();
+        assert(consensus.hashGenesisBlock == uint256S("0x00000beaf44b677caba30c8507e91f64f465032641a7fce4d97c859c6c16fea7"));
+        assert(genesis.hashMerkleRoot == uint256S("0x15d1b22c75054f04486de21455b82b20f3d5c5ec68f783399cd4728ac395518d"));
 
         vFixedSeeds.clear();
         vSeeds.clear();
