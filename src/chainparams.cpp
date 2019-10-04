@@ -251,7 +251,7 @@ public:
         */
 
         assert(consensus.hashGenesisBlock == uint256S("0x0000b573f1d00d1ec5673c55a53c7897ec6dac787ddcc67ae6c26cd0c04f32e9"));
-        assert(genesis.hashMerkleRoot == uint256S("0x15d1b22c75054f04486de21455b82b20f3d5c5ec68f783399cd4728ac395518d")$
+        assert(genesis.hashMerkleRoot == uint256S("0x15d1b22c75054f04486de21455b82b20f3d5c5ec68f783399cd4728ac395518d"));
 
         vFixedSeeds.clear();
         vSeeds.clear();
