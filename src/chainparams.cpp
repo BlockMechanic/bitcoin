@@ -229,12 +229,10 @@ public:
         uint256 hashGenesisBlock = uint256S("0000528be56515b134dbd94bf0122808c39abc5fb0b7d51f510c85193c403cfb");
         uint256 hashMerkleRoot = uint256S("b3f600f3271af244dffbd32692690f8c1d4827173be50fb27e55e3eb902aa327");
         uint32_t nNonce = 203645;
-        */
 
-        genesis = CreateGenesisBlockTestnet(1548795387, 205655, 0x1f00ffff, 1, 0);
+        genesis = CreateGenesisBlockTestnet(nTimestamp, nNonce, 0x1f00ffff, 1, 0);
         consensus.hashGenesisBlock = genesis.GetHash();
 
-        /*
         if (true && (genesis.GetHash() != hashGenesisBlock || genesis.hashMerkleRoot != hashMerkleRoot))
         {
             printf("recalculating params for testnet.\n");
@@ -249,6 +247,9 @@ public:
         assert(consensus.hashGenesisBlock == hashGenesisBlock);
         assert(genesis.hashMerkleRoot == hashMerkleRoot);
         */
+
+        genesis = CreateGenesisBlockTestnet(1548795387, 205655, 0x1f00ffff, 1, 0);
+        consensus.hashGenesisBlock = genesis.GetHash();
 
         assert(consensus.hashGenesisBlock == uint256S("0x0000b573f1d00d1ec5673c55a53c7897ec6dac787ddcc67ae6c26cd0c04f32e9"));
         assert(genesis.hashMerkleRoot == uint256S("0x15d1b22c75054f04486de21455b82b20f3d5c5ec68f783399cd4728ac395518d"));
