@@ -590,7 +590,7 @@ void ThreadStakeMiner(CWallet *pwallet, const CChainParams& chainparams)
 
     // Make this thread recognisable as the mining thread
     RenameThread("potcoin-miner");
-
+#ifdef ENABLE_WALLET
     CReserveKey reservekey(pwallet);
 
     bool fTryToSync = true;
@@ -650,4 +650,5 @@ void ThreadStakeMiner(CWallet *pwallet, const CChainParams& chainparams)
         }
         MilliSleep(nMinerSleep);
     }
+#endif 
 }

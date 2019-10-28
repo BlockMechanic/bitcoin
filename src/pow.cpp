@@ -11,6 +11,7 @@
 #include "uint256.h"
 #include "util.h"
 #include <stdio.h>
+#include <cmath>
 
 static arith_uint256 GetTargetLimit(int64_t nTime, const Consensus::Params& params, bool fProofOfStake)
 {
@@ -154,7 +155,7 @@ unsigned int static KimotoGravityWell(const CBlockIndex* pindexLast, const Conse
         if (PastRateActualSeconds != 0 && PastRateTargetSeconds != 0) {
             PastRateAdjustmentRatio = double(PastRateTargetSeconds) / double(PastRateActualSeconds);
         }
-        EventHorizonDeviation = 1 + (0.7084 * pow((double(PastBlocksMass)/double(144)), -1.228));
+        EventHorizonDeviation = 1 + (0.7084 * std::pow((double(PastBlocksMass)/double(144)), -1.228));
         EventHorizonDeviationFast = EventHorizonDeviation;
         EventHorizonDeviationSlow  = 1 / EventHorizonDeviation;
 
