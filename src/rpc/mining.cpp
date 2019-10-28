@@ -267,9 +267,11 @@ UniValue getstakinginfo(const UniValue& params, bool fHelp)
             "Returns an object containing staking-related information.");
 
     uint64_t nWeight = 0;
+#ifdef ENABLE_WALLET
+    
     if (pwalletMain)
         nWeight = pwalletMain->GetStakeWeight();
-
+#endif
     uint64_t nNetworkWeight = GetPoSKernelPS();
     bool staking = nLastCoinStakeSearchInterval && nWeight;
     uint64_t nExpectedTime = staking ? 1.0455 * 64 * nNetworkWeight / nWeight : 0;
@@ -913,6 +915,7 @@ UniValue checkkernel(const UniValue& params, bool fHelp)
 
         if (!fCreateBlockTemplate)
             return result;
+#ifdef ENABLE_WALLET
 
         int64_t nFees;
         if (!pwalletMain->IsLocked())
@@ -937,7 +940,7 @@ UniValue checkkernel(const UniValue& params, bool fHelp)
             throw JSONRPCError(RPC_MISC_ERROR, "GetReservedKey failed");
 
         result.push_back(Pair("blocktemplatesignkey", HexStr(pubkey)));
-
+#endif
         return result;
 }
 
