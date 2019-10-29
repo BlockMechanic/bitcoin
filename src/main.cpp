@@ -3841,6 +3841,7 @@ bool SignBlock(CBlock& block, CWallet& wallet, int64_t& nFees)
 
     int64_t nMinTime;
     int64_t nSearchTime = txCoinStake.nTime; // search to current time
+#ifdef ENABLE_WALLET
 
     if (nSearchTime > nLastCoinStakeSearchTime)
     {
@@ -3875,7 +3876,7 @@ bool SignBlock(CBlock& block, CWallet& wallet, int64_t& nFees)
         nLastCoinStakeSearchInterval = nSearchTime - nLastCoinStakeSearchTime;
         nLastCoinStakeSearchTime = nSearchTime;
     }
-
+#endif
     return false;
 }
 
@@ -6146,7 +6147,9 @@ bool static ProcessMessage(CNode* pfrom, string strCommand, CDataStream& vRecv, 
         for (unsigned int n = 0; n < nCount; n++) {
             vRecv >> headers[n];
             ReadCompactSize(vRecv); // ignore tx count; assume it is 0.
-            ReadCompactSize(vRecv); // ignore block sig; assume it is 0.
+
+            // LogPrintf("test case!\n");
+            // ReadCompactSize(vRecv); // ignore block sig; assume it is 0.
         }
 
         {

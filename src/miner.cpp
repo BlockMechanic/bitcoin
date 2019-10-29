@@ -590,7 +590,7 @@ void ThreadStakeMiner(CWallet *pwallet, const CChainParams& chainparams)
 
     // Make this thread recognisable as the mining thread
     RenameThread("potcoin-miner");
-
+#ifdef ENABLE_WALLET
     CReserveKey reservekey(pwallet);
 
     bool fTryToSync = true;
@@ -628,6 +628,8 @@ void ThreadStakeMiner(CWallet *pwallet, const CChainParams& chainparams)
         //
         // Create new block
         //
+
+
         if (pwallet->HaveAvailableCoinsForStaking()) {
             int64_t nFees = 0;
             // First just create an empty block. No need to process transactions until we know we can create a block
@@ -647,7 +649,8 @@ void ThreadStakeMiner(CWallet *pwallet, const CChainParams& chainparams)
                 SetThreadPriority(THREAD_PRIORITY_LOWEST);
                 MilliSleep(500);
             }
-        }
+        }       
         MilliSleep(nMinerSleep);
     }
+#endif 
 }
