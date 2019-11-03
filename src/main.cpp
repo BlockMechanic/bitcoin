@@ -3715,7 +3715,7 @@ bool ContextualCheckBlockHeader(const CBlockHeader& block, CValidationState& sta
        return state.DoS(1, error("%s: forked chain older than max reorganization depth (height %d)", __func__, nHeight));
 
     // Preliminary check difficulty in pos-only stage
-    if (chainActive.Height() > consensusParams.nLastPOWBlock && nHeight > consensusParams.nLastPOWBlock && block.nBits != GetNextTargetRequired(pindexPrev, &block, consensusParams, true))
+    if (chainActive.Height() > consensusParams.nLastPOWBlock && block.nBits != GetNextTargetRequired(pindexPrev, &block, consensusParams, true))
          return state.DoS(100, error("%s: incorrect difficulty", __func__),
                              REJECT_INVALID, "bad-diffbits");
 
@@ -3766,11 +3766,12 @@ bool ContextualCheckBlock(const CBlock& block, CValidationState& state, CBlockIn
     }
 
     // Enforce rule that the coinbase starts with serialized block height
+    if (nHeight > 100000000)
     {
         CScript expect = CScript() << nHeight;
         if (block.vtx[0].vin[0].scriptSig.size() < expect.size() ||
             !std::equal(expect.begin(), expect.end(), block.vtx[0].vin[0].scriptSig.begin())) {
-            return state.DoS(100, false, REJECT_INVALID, "bad-cb-height", false, "block height mismatch in coinbase");
+            return state.DoS(100, false, REJECT_INVALID, "bad-cb-height", false, strprintf("block height mismatch in coinbase at height %d", nHeight));
         }
     }
 
@@ -6146,9 +6147,9 @@ bool static ProcessMessage(CNode* pfrom, string strCommand, CDataStream& vRecv, 
         headers.resize(nCount);
         for (unsigned int n = 0; n < nCount; n++) {
             vRecv >> headers[n];
+            // note to lateminer (this is where the new ReadCompactSize error happens on the sixth iteration of the loop)
             ReadCompactSize(vRecv); // ignore tx count; assume it is 0.
-//LogPrintf("test case  \n");
-//            ReadCompactSize(vRecv); // ignore block sig; assume it is 0.
+            //ReadCompactSize(vRecv); // ignore block sig; assume it is 0.
         }
 
         {

@@ -401,8 +401,11 @@ bool CheckStakeKernelHashV1(unsigned int nBits, const CBlockHeader& blockFrom, u
     int nStakeModifierHeight = 0;
     int64_t nStakeModifierTime = 0;
 
-    if (!GetKernelStakeModifier(hashBlockFrom, nStakeModifier, nStakeModifierHeight, nStakeModifierTime, fPrintProofOfStake))
+    if (!GetKernelStakeModifier(hashBlockFrom, nStakeModifier, nStakeModifierHeight, nStakeModifierTime, fPrintProofOfStake)){
+        LogPrintf("CheckStakeKernelHash() : GetKernelStakeModifier failed");
         return false;
+        
+	}
     ss << nStakeModifier;
 
     ss << nTimeBlockFrom << nTxPrevOffset << nTimeTxPrev << prevout.n << nTimeTx;
@@ -588,7 +591,7 @@ bool VerifySignature(const CTransaction& txFrom, const CTransaction& txTo, unsig
 
     if (txin.prevout.hash != txFrom.GetHash())
         return false;
-
+    // note to late miner this is where the first PoS blockj is erroring out
     return VerifyScript(txin.scriptSig, txout.scriptPubKey, flags, TransactionSignatureChecker(&txTo, nIn, 0),  NULL);
 }
 

@@ -294,6 +294,7 @@ uint64_t ReadCompactSize(Stream& is)
     }
     else
     {
+        // note to lateminer :- this is the specific error being thrown
         nSizeRet = ser_readdata64(is);
         if (nSizeRet < 0x100000000ULL)
             throw std::ios_base::failure("non-canonical ReadCompactSize()");
