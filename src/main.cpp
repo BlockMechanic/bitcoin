@@ -2498,7 +2498,9 @@ bool ConnectBlock(const CBlock& block, CValidationState& state, CBlockIndex* pin
     }
     */
 
-    bool fScriptChecks = true;
+    // Potcoin ToDo: enable script checks
+    // bool fScriptChecks = true;
+    bool fScriptChecks = chainparams.GetConsensus().IsProtocolV3(block.GetBlockTime());
     if (fCheckpointsEnabled) {
         CBlockIndex *pindexLastCheckpoint = Checkpoints::GetLastCheckpoint(chainparams.Checkpoints());
         if (pindexLastCheckpoint && pindexLastCheckpoint->GetAncestor(pindex->nHeight) == pindex) {
