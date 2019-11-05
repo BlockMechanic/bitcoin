@@ -552,16 +552,16 @@ bool CheckProofOfStake(CBlockIndex* pindexPrev, const CTransaction& tx, unsigned
     if (!GetTransaction(txin.prevout.hash, txPrev, Params().GetConsensus(), hashBlock, true))
        return state.DoS(100, error("CheckProofOfStake() : INFO: read txPrev failed"));  // previous transaction not in main chain, may occur during initial download
 
-    if (mapBlockIndex.count(hashBlock) == 0)
-        return fDebug ? state.DoS(100, error("CheckProofOfStake() : read block failed")) : false; // unable to read block of previous transaction
-
     // Verify inputs
-    if (txin.prevout.hash != txPrev.GetHash())
-        return state.DoS(100, error("CheckProofOfStake() : coinstake input does not match previous output %s", txin.prevout.hash.GetHex()));
-
-    // Verify signature
-    if (!VerifySignature(txPrev, tx, 0, SCRIPT_VERIFY_NONE, 0))
-       return state.DoS(100, error("CheckProofOfStake() : VerifySignature failed on coinstake %s", tx.GetHash().ToString()));
+    const CTxOut& txout = txPrev.vout[txin.prevout.n];
+    if (txin.prevout.n >= txPrev.vout.size()) return false;
+    if (txin.prevout.hash != txPrev.GetHash()) return false;
+    ScriptError serror = SCRIPT_ERR_OK;
+    if (!VerifyScript(txin.scriptSig, txout.scriptPubKey, (SCRIPT_VERIFY_DERSIG | SCRIPT_VERIFY_P2SH ), TransactionSignatureChecker(&tx, 0), &serror)){
+        LogPrintf("CheckProofOfStake() : VerifySignature failed on coinstake %s, scriptsig = %s,  scriptPubKey=%s , extsiting errors = %s",
+			tx.GetHash().ToString(), txin.scriptSig.ToString(), txout.scriptPubKey.ToString(), std::string(ScriptErrorString(serror)).c_str());
+        return false;
+    }
 
     CBlockIndex* pblockindex = mapBlockIndex[hashBlock];
 
@@ -579,20 +579,6 @@ bool CheckProofOfStake(CBlockIndex* pindexPrev, const CTransaction& tx, unsigned
        return state.DoS(1, error("CheckProofOfStake() : INFO: check kernel failed on coinstake %s", tx.GetHash().ToString())); // may occur during initial download or if behind on block chain sync
 
     return true;
-}
-
-bool VerifySignature(const CTransaction& txFrom, const CTransaction& txTo, unsigned int nIn, unsigned int flags, int nHashType)
-{
-    assert(nIn < txTo.vin.size());
-    const CTxIn& txin = txTo.vin[nIn];
-    if (txin.prevout.n >= txFrom.vout.size())
-        return false;
-    const CTxOut& txout = txFrom.vout[txin.prevout.n];
-
-    if (txin.prevout.hash != txFrom.GetHash())
-        return false;
-    // note to late miner this is where the first PoS blockj is erroring out
-    return VerifyScript(txin.scriptSig, txout.scriptPubKey, flags, TransactionSignatureChecker(&txTo, nIn, 0),  NULL);
 }
 
 bool CheckKernel(CBlockIndex* pindexPrev, unsigned int nBits, uint32_t nTime, const COutPoint& prevout, int64_t* pBlockTime)

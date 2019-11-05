@@ -2473,7 +2473,7 @@ bool ConnectBlock(const CBlock& block, CValidationState& state, CBlockIndex* pin
     pindex->nStakeModifierV2 = ComputeStakeModifierV2(pindex->pprev, block.IsProofOfStake() ? block.vtx[1].vin[0].prevout.hash : block.GetHash());
 
     // Check difficulty
-    if (block.nBits != GetNextTargetRequired(pindex->pprev, &block, chainparams.GetConsensus(), block.IsProofOfStake()))
+    if (chainActive.Height() > chainparams.GetConsensus().nLastPOWBlock && block.nBits != GetNextTargetRequired(pindex->pprev, &block, chainparams.GetConsensus(), block.IsProofOfStake()))
          return state.DoS(100, error("ConnectBlock(): incorrect difficulty"),
                         REJECT_INVALID, "bad-diffbits");
 
@@ -3764,17 +3764,17 @@ bool ContextualCheckBlock(const CBlock& block, CValidationState& state, CBlockIn
             return state.DoS(10, false, REJECT_INVALID, "bad-txns-nonfinal", false, "non-final transaction");
         }
     }
-
+/*
     // Enforce rule that the coinbase starts with serialized block height
-    if (nHeight > 100000000)
+    if (nHeight > 0 && nHeight != 3690 && block.nVersion >= 2)
     {
         CScript expect = CScript() << nHeight;
         if (block.vtx[0].vin[0].scriptSig.size() < expect.size() ||
             !std::equal(expect.begin(), expect.end(), block.vtx[0].vin[0].scriptSig.begin())) {
-            return state.DoS(100, false, REJECT_INVALID, "bad-cb-height", false, strprintf("block height mismatch in coinbase at height %d", nHeight));
+            return state.DoS(100, false, REJECT_INVALID, "bad-cb-height", false, strprintf("block height mismatch in coinbase at height %d block version = %d", nHeight, block.nVersion));
         }
     }
-
+*/
     return true;
 }
 
