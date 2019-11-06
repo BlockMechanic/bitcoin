@@ -377,7 +377,7 @@ uint256 ComputeStakeModifierV2(const CBlockIndex* pindexPrev, const uint256& ker
 //   quantities so as to generate blocks faster, degrading the system back into
 //   a proof-of-work situation.
 //
-bool CheckStakeKernelHashV1(unsigned int nBits, const CBlockHeader& blockFrom, unsigned int nTxPrevOffset, const CTransaction& txPrev, const COutPoint& prevout, unsigned int nTimeTx, uint256& hashProofOfStake, bool fPrintProofOfStake)
+bool CheckStakeKernelHashV1(unsigned int nBits, const CBlock& blockFrom, unsigned int nTxPrevOffset, const CTransaction& txPrev, const COutPoint& prevout, unsigned int nTimeTx, uint256& hashProofOfStake, bool fPrintProofOfStake)
 {
     unsigned int nTimeBlockFrom = blockFrom.GetBlockTime();
     unsigned int nTimeTxPrev = txPrev.nTime;
@@ -508,7 +508,7 @@ bool CheckStakeKernelHashV2(const CBlockIndex* pindexPrev, unsigned int nBits, c
     return true;
 }
 
-bool CheckStakeKernelHash(const CBlockIndex* pindexPrev, unsigned int nBits, CBlockHeader& blockFrom, unsigned int nTxPrevOffset, const CTransaction& txPrev, const COutPoint& prevout, unsigned int nTimeTx, uint256& hashProofOfStake, bool fPrintProofOfStake)
+bool CheckStakeKernelHash(const CBlockIndex* pindexPrev, unsigned int nBits, const CBlock& blockFrom, unsigned int nTxPrevOffset, const CTransaction& txPrev, const COutPoint& prevout, unsigned int nTimeTx, uint256& hashProofOfStake, bool fPrintProofOfStake)
 {
     if (Params().GetConsensus().IsProtocolV3(pindexPrev->GetBlockTime()))
         return CheckStakeKernelHashV2(pindexPrev, nBits, txPrev, prevout, nTimeTx, hashProofOfStake, fPrintProofOfStake);
@@ -531,12 +531,12 @@ bool CheckProofOfStake(CBlockIndex* pindexPrev, const CTransaction& tx, unsigned
         return error("CheckProofOfStake() : tx index not found");  // tx index not found
 
     // Read txPrev and header of its block
-    CBlockHeader header;
+    CBlock block;
     CTransaction txPrev2;
     {
         CAutoFile file(OpenBlockFile(postx, true), SER_DISK, CLIENT_VERSION);
         try {
-            file >> header;
+            file >> block;
             fseek(file.Get(), postx.nTxOffset, SEEK_CUR);
             file >> txPrev2;
         } catch (std::exception &e) {
@@ -575,7 +575,7 @@ bool CheckProofOfStake(CBlockIndex* pindexPrev, const CTransaction& tx, unsigned
             return state.DoS(100, error("CheckProofOfStake() : only count coins meeting min age requirement, expecting %i and only matured to %i", Params().GetConsensus().nCoinbaseMaturity, pindexPrev->nHeight + 1 - mapBlockIndex[hashBlock]->nHeight));
         }
     }
-    if (!CheckStakeKernelHash(pindexPrev, nBits, header, postx.nTxOffset, txPrev, txin.prevout, tx.nTime, hashProofOfStake, fDebug))
+    if (!CheckStakeKernelHash(pindexPrev, nBits, block, postx.nTxOffset, txPrev, txin.prevout, tx.nTime, hashProofOfStake, fDebug))
        return state.DoS(1, error("CheckProofOfStake() : INFO: check kernel failed on coinstake %s", tx.GetHash().ToString())); // may occur during initial download or if behind on block chain sync
 
     return true;

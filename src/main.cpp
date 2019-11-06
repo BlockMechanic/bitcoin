@@ -2245,6 +2245,7 @@ static bool ApplyTxInUndo(const CTxInUndo& undo, CCoinsViewCache& view, const CO
             fClean = fClean && error("%s: undo data overwriting existing transaction", __func__);
         coins->Clear();
         coins->fCoinBase = undo.fCoinBase;
+        coins->fCoinStake = undo.fCoinStake;
         coins->nHeight = undo.nHeight;
         coins->nVersion = undo.nVersion;
         coins->nTime = undo.nTime;
@@ -2445,8 +2446,12 @@ bool ConnectBlock(const CBlock& block, CValidationState& state, CBlockIndex* pin
         const COutPoint &prevout = block.vtx[1].vin[0].prevout;
         const CCoins *coins = view.AccessCoins(prevout.hash);
         if (!coins)
-            return state.DoS(100, error("ConnectBlock() : kernel input unavailable"),
-                                REJECT_INVALID, "bad-cs-kernel");
+            return state.DoS(100, error("%s: kernel input unavailable", __func__), REJECT_INVALID, "bad-cs-kernel");
+
+       // Check proof-of-stake min confirmations
+       if (pindex->nHeight - coins->nHeight < chainparams.GetConsensus().nCoinbaseMaturity)
+            return state.DoS(100, error("%s: tried to stake at depth %d", __func__, pindex->nHeight - coins->nHeight),
+                REJECT_INVALID, "bad-cs-premature");
 
         if (!CheckProofOfStake(pindex->pprev, block.vtx[1], block.nBits, hashProofOfStake, state))
             return error("ConnectBlock() : check proof-of-stake signature failed for block %s", block.GetHash().GetHex());
@@ -2476,27 +2481,6 @@ bool ConnectBlock(const CBlock& block, CValidationState& state, CBlockIndex* pin
     if (chainActive.Height() > chainparams.GetConsensus().nLastPOWBlock && block.nBits != GetNextTargetRequired(pindex->pprev, &block, chainparams.GetConsensus(), block.IsProofOfStake()))
          return state.DoS(100, error("ConnectBlock(): incorrect difficulty"),
                         REJECT_INVALID, "bad-diffbits");
-
-    /*
-    // Check proof-of-stake
-    if (block.IsProofOfStake() && chainparams.GetConsensus().IsProtocolV3(block.GetBlockTime())) {
-         const COutPoint &prevout = block.vtx[1].vin[0].prevout;
-         const CCoins *coins = view.AccessCoins(prevout.hash);
-          if (!coins)
-              return state.DoS(100, error("ConnectBlock(): kernel input unavailable"),
-                                REJECT_INVALID, "bad-cs-kernel");
-
-         // Check proof-of-stake min confirmations
-         if (pindex->nHeight - coins->nHeight < chainparams.GetConsensus().nCoinbaseMaturity)
-              return state.DoS(100,
-                  error("ConnectBlock(): tried to stake at depth %d", pindex->nHeight - coins->nHeight),
-                    REJECT_INVALID, "bad-cs-premature");
-
-         if (!CheckStakeKernelHash(pindex->pprev, block.nBits, coins, prevout, block.vtx[1].nTime))
-              return state.DoS(100, error("ConnectBlock(): proof-of-stake hash doesn't match nBits"),
-                                 REJECT_INVALID, "bad-cs-proofhash");
-    }
-    */
 
     // Potcoin ToDo: enable script checks
     // bool fScriptChecks = true;
@@ -6151,7 +6135,8 @@ bool static ProcessMessage(CNode* pfrom, string strCommand, CDataStream& vRecv, 
             vRecv >> headers[n];
             // note to lateminer (this is where the new ReadCompactSize error happens on the sixth iteration of the loop)
             ReadCompactSize(vRecv); // ignore tx count; assume it is 0.
-            //ReadCompactSize(vRecv); // ignore block sig; assume it is 0.
+            if (headers[n].nVersion > 2)
+                ReadCompactSize(vRecv);            
         }
 
         {
