@@ -90,6 +90,34 @@ class LockImpl : public Chain::Lock, public UniqueLock<CCriticalSection>
         CBlockIndex* block = ::ChainActive()[height];
         return block && ((block->nStatus & BLOCK_HAVE_DATA) != 0) && block->nTx > 0;
     }
+    bool IsProofOfStake(int height) override
+    {
+        LockAssertion lock(::cs_main);
+        CBlockIndex* block = ::ChainActive()[height];
+        return block && block->IsProofOfStake();
+    }
+    uint160 ReadStakeIndex(int height) override
+    {
+		uint160 stakeAddress;
+        LockAssertion lock(::cs_main);
+
+		if(!pblocktree->ReadStakeIndex(height, stakeAddress)){
+			return uint160();
+		}
+        return stakeAddress;
+    }
+    bool startStake(bool fStake, CWallet *pwallet, boost::thread_group*& stakeThread)override{
+		
+		::Stake(fStake, pwallet, stakeThread);
+		return true;
+		
+	}    
+    void cacheKernel(std::map<COutPoint, CStakeCache>& cache, const COutPoint& prevout) override {
+		CacheKernel(cache, prevout, *pcoinsTip);
+	}
+	bool checkKernel(unsigned int nBits, uint32_t nTimeBlock, const COutPoint& prevout, const std::map<COutPoint, CStakeCache>& cache) override {
+		return CheckKernel(nBits,nTimeBlock,prevout, *pcoinsTip,cache);		
+	}
     Optional<int> findFirstBlockWithTimeAndHeight(int64_t time, int height, uint256* hash) override
     {
         LockAssertion lock(::cs_main);

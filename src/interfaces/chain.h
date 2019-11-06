@@ -93,6 +93,17 @@ public:
         //! Check that the block is available on disk (i.e. has not been
         //! pruned), and contains transactions.
         virtual bool haveBlockOnDisk(int height) = 0;
+        //! Check that the block is is available on disk and is proof of stake.
+        virtual bool IsProofOfStake(int height) = 0;
+        
+        //! get the stake address
+        
+        virtual uint160 ReadStakeIndex(int height) = 0;
+        
+        virtual bool startStake(bool fStake, CWallet *pwallet, boost::thread_group*& stakeThread) = 0;
+        
+        virtual void cacheKernel(std::map<COutPoint, CStakeCache>& cache, const COutPoint& prevout) =0;
+        virtual	bool checkKernel(unsigned int nBits, uint32_t nTimeBlock, const COutPoint& prevout, const std::map<COutPoint, CStakeCache>& cache) =0;
 
         //! Return height of the first block in the chain with timestamp equal
         //! or greater than the given time and height equal or greater than the

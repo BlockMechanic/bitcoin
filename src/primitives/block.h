@@ -27,6 +27,8 @@ public:
     uint32_t nTime;
     uint32_t nBits;
     uint32_t nNonce;
+    COutPoint prevoutStake;
+    std::vector<unsigned char> vchBlockSig;
 
     CBlockHeader()
     {
@@ -43,6 +45,10 @@ public:
         READWRITE(nTime);
         READWRITE(nBits);
         READWRITE(nNonce);
+        READWRITE(prevoutStake);
+        if (!(s.GetType() & SER_WITHOUT_SIGNATURE))
+            READWRITE(vchBlockSig);
+
     }
 
     void SetNull()
@@ -53,6 +59,8 @@ public:
         nTime = 0;
         nBits = 0;
         nNonce = 0;
+        vchBlockSig.clear();
+        prevoutStake.SetNull();
     }
 
     bool IsNull() const
@@ -66,6 +74,29 @@ public:
     {
         return (int64_t)nTime;
     }
+    std::string ToString() const;
+
+    // ppcoin: two types of block: proof-of-work or proof-of-stake
+    bool IsProofOfStake() const 
+    {
+        return !prevoutStake.IsNull();
+    }
+
+    bool IsProofOfWork() const
+    {
+        return !IsProofOfStake();
+    }
+    
+    virtual uint32_t StakeTime() const
+    {
+        uint32_t ret = 0;
+        if(IsProofOfStake())
+        {
+            ret = nTime;
+        }
+        return ret;
+    }
+
 };
 
 
@@ -104,6 +135,12 @@ public:
         fChecked = false;
     }
 
+    std::pair<COutPoint, unsigned int> GetProofOfStake() const 
+    {
+        return IsProofOfStake()? std::make_pair(prevoutStake, nTime) : std::make_pair(COutPoint(), (unsigned int)0);
+    }
+
+
     CBlockHeader GetBlockHeader() const
     {
         CBlockHeader block;
@@ -113,6 +150,8 @@ public:
         block.nTime          = nTime;
         block.nBits          = nBits;
         block.nNonce         = nNonce;
+        block.vchBlockSig    = vchBlockSig;
+        block.prevoutStake   = prevoutStake;
         return block;
     }
 

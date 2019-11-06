@@ -137,6 +137,8 @@ public:
     RecentRequestsTableModel *getRecentRequestsTableModel();
 
     EncryptionStatus getEncryptionStatus() const;
+    void getScriptForMining(std::shared_ptr<CTxDestination> &script);
+
 
     // Check address for validity
     bool validateAddress(const QString &address);
@@ -165,6 +167,9 @@ public:
     bool setWalletLocked(bool locked, const SecureString &passPhrase=SecureString());
     bool changePassphrase(const SecureString &oldPass, const SecureString &newPass);
 
+    bool getWalletUnlockStakingOnly();
+    void setWalletUnlockStakingOnly(bool unlock);
+
     // RAI object for unlocking wallet, returned by requestUnlock()
     class UnlockContext
     {
@@ -183,6 +188,7 @@ public:
         WalletModel *wallet;
         bool valid;
         mutable bool relock; // mutable, as it can be set to false by copying
+        bool stakingOnly;
 
         UnlockContext& operator=(const UnlockContext&) = default;
         void CopyFrom(UnlockContext&& rhs);
@@ -206,6 +212,7 @@ public:
     QString getDisplayName() const;
 
     bool isMultiwallet();
+    uint64_t getStakeWeight();
 
     AddressTableModel* getAddressTableModel() const { return addressTableModel; }
 private:
@@ -234,6 +241,9 @@ private:
     interfaces::WalletBalances m_cached_balances;
     EncryptionStatus cachedEncryptionStatus;
     int cachedNumBlocks;
+
+    uint64_t nWeight;
+    std::atomic<bool> updateStakeWeight;
 
     void subscribeToCoreSignals();
     void unsubscribeFromCoreSignals();
@@ -283,6 +293,10 @@ public Q_SLOTS:
     void updateWatchOnlyFlag(bool fHaveWatchonly);
     /* Current, immature or unconfirmed balance might have changed - emit 'balanceChanged' if so */
     void pollBalanceChanged();
+
+    /* Update stake weight when changed*/
+    void checkStakeWeightChanged();
+
 };
 
 #endif // BITCOIN_QT_WALLETMODEL_H

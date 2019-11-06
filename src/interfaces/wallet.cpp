@@ -55,6 +55,7 @@ WalletTx MakeWalletTx(interfaces::Chain::Lock& locked_chain, CWallet& wallet, co
     result.time = wtx.GetTxTime();
     result.value_map = wtx.mapValue;
     result.is_coinbase = wtx.IsCoinBase();
+    result.is_coinstake = wtx.IsCoinStake();
     return result;
 }
 
@@ -71,6 +72,7 @@ WalletTxStatus MakeWalletTxStatus(interfaces::Chain::Lock& locked_chain, const C
     result.is_trusted = wtx.IsTrusted(locked_chain);
     result.is_abandoned = wtx.isAbandoned();
     result.is_coinbase = wtx.IsCoinBase();
+    result.is_coinstake = wtx.IsCoinStake();
     result.is_in_main_chain = wtx.IsInMainChain(locked_chain);
     return result;
 }
@@ -321,7 +323,8 @@ public:
         WalletTxStatus& tx_status,
         WalletOrderForm& order_form,
         bool& in_mempool,
-        int& num_blocks) override
+        int& num_blocks,
+        int64_t& block_time) override
     {
         auto locked_chain = m_wallet->chain().lock();
         LOCK(m_wallet->cs_wallet);
@@ -329,6 +332,7 @@ public:
         if (mi != m_wallet->mapWallet.end()) {
             num_blocks = locked_chain->getHeight().get_value_or(-1);
             in_mempool = mi->second.InMempool();
+            block_time = locked_chain->getBlockTime(num_blocks);
             order_form = mi->second.vOrderForm;
             tx_status = MakeWalletTxStatus(*locked_chain, mi->second);
             return MakeWalletTx(*locked_chain, *m_wallet, mi->second);
@@ -342,11 +346,13 @@ public:
         result.balance = bal.m_mine_trusted;
         result.unconfirmed_balance = bal.m_mine_untrusted_pending;
         result.immature_balance = bal.m_mine_immature;
+        result.stake = bal.m_mine_stake;
         result.have_watch_only = m_wallet->HaveWatchOnly();
         if (result.have_watch_only) {
             result.watch_only_balance = bal.m_watchonly_trusted;
             result.unconfirmed_watch_only_balance = bal.m_watchonly_untrusted_pending;
             result.immature_watch_only_balance = bal.m_watchonly_immature;
+            result.watch_only_stake = m_wallet->GetWatchOnlyStake();
         }
         return result;
     }
@@ -447,6 +453,34 @@ public:
     {
         RemoveWallet(m_wallet);
     }
+    bool tryGetStakeWeight(uint64_t& nWeight) override
+    {
+        auto locked_chain = m_wallet->chain().lock();
+
+        if (!locked_chain) {
+            return false;
+        }
+        TRY_LOCK(m_wallet->cs_wallet, locked_wallet);
+        if (!locked_wallet) {
+            return false;
+        }
+        nWeight = m_wallet->GetStakeWeight();
+        return true;
+    }
+    int64_t getLastCoinStakeSearchInterval() override 
+    { 
+        return m_wallet->m_last_coin_stake_search_interval;
+    }
+    bool getWalletUnlockStakingOnly() override
+    {
+        return m_wallet->m_wallet_unlock_staking_only;
+    }
+
+    void setWalletUnlockStakingOnly(bool unlock) override
+    {
+        m_wallet->m_wallet_unlock_staking_only = unlock;
+    }
+
     std::unique_ptr<Handler> handleUnload(UnloadFn fn) override
     {
         return MakeHandler(m_wallet->NotifyUnload.connect(fn));
@@ -478,7 +512,9 @@ public:
     {
         return MakeHandler(m_wallet->NotifyCanGetAddressesChanged.connect(fn));
     }
-
+    void getScriptForMining(std::shared_ptr<CTxDestination> &script) override{
+		m_wallet->GetScriptForMining(script);
+	}
     std::shared_ptr<CWallet> m_wallet;
 };
 
