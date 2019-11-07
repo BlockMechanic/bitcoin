@@ -526,31 +526,26 @@ bool CheckProofOfStake(CBlockIndex* pindexPrev, const CTransaction& tx, unsigned
     const CTxIn& txin = tx.vin[0];
 
     // Get transaction index for the previous transaction
-    CDiskTxPos postx;
-    if (!pblocktree->ReadTxIndex(txin.prevout.hash, postx))
-        return error("CheckProofOfStake() : tx index not found");  // tx index not found
-
-    // Read txPrev and header of its block
-    CBlock block;
-    CTransaction txPrev2;
-    {
-        CAutoFile file(OpenBlockFile(postx, true), SER_DISK, CLIENT_VERSION);
-        try {
-            file >> block;
-            fseek(file.Get(), postx.nTxOffset, SEEK_CUR);
-            file >> txPrev2;
-        } catch (std::exception &e) {
-            return error("%s() : deserialize or I/O error in CheckProofOfStake()", __PRETTY_FUNCTION__);
-        }
-        if (txPrev2.GetHash() != txin.prevout.hash)
-            return error("%s() : txid mismatch in CheckProofOfStake()", __PRETTY_FUNCTION__);
-    }
+    CCoinsViewCache &view = *pcoinsTip;
+    const COutPoint &prevout = txin.prevout;
+    const CCoins *coins = view.AccessCoins(prevout.hash);
+    if (!coins)
+        return state.DoS(100, error("%s: kernel input unavailable", __func__), REJECT_INVALID, "bad-cs-kernel");
 
     // First try finding the previous transaction in database
     CTransaction txPrev;
     uint256 hashBlock = uint256();
     if (!GetTransaction(txin.prevout.hash, txPrev, Params().GetConsensus(), hashBlock, true))
        return state.DoS(100, error("CheckProofOfStake() : INFO: read txPrev failed"));  // previous transaction not in main chain, may occur during initial download
+
+    CDiskTxPos postx;
+    if (!pblocktree->ReadTxIndex(txin.prevout.hash, postx))
+        return error("CheckProofOfStake() : tx index not found");  // tx index not found
+
+    // Read txPrev and its block
+    CBlock block;
+    if (!ReadBlockFromDisk(block, pindexPrev, Params().GetConsensus()))
+       return state.DoS(100, error("CheckProofOfStake() : INFO: read block failed"));  // block not found
 
     // Verify inputs
     const CTxOut& txout = txPrev.vout[txin.prevout.n];
@@ -583,58 +578,44 @@ bool CheckProofOfStake(CBlockIndex* pindexPrev, const CTransaction& tx, unsigned
 
 bool CheckKernel(CBlockIndex* pindexPrev, unsigned int nBits, uint32_t nTime, const COutPoint& prevout, int64_t* pBlockTime)
 {
-    CTransaction txPrev;
-    uint256 hashBlock = uint256();
-    uint256 hashProofOfStake = uint256();
+    uint256 targetProofOfStake;
+    CValidationState state;
+    const CChainParams& chainparams = Params();
+    CCoinsViewCache &view = *pcoinsTip;
+    const CCoins *coins = view.AccessCoins(prevout.hash);
+    if (!coins)
+        return false;
+
+    // Read block header
+    CBlock block;
+    if (!ReadBlockFromDisk(block, pindexPrev, chainparams.GetConsensus()))
+        return false;
+
+    if (pBlockTime)
+        *pBlockTime = block.GetBlockTime();
 
     // Get transaction index for the previous transaction
     CDiskTxPos postx;
     if (!pblocktree->ReadTxIndex(prevout.hash, postx))
         return error("CheckProofOfStake() : tx index not found");  // tx index not found
 
-    // Read txPrev and header of its block
-    CBlockHeader header;
-    CTransaction txPrev2;
-    {
-        CAutoFile file(OpenBlockFile(postx, true), SER_DISK, CLIENT_VERSION);
-        try {
-            file >> header;
-            fseek(file.Get(), postx.nTxOffset, SEEK_CUR);
-            file >> txPrev2;
-        } catch (std::exception &e) {
-            return error("%s() : deserialize or I/O error in CheckProofOfStake()", __PRETTY_FUNCTION__);
-        }
-        if (txPrev2.GetHash() != prevout.hash)
-            return error("%s() : txid mismatch in CheckProofOfStake()", __PRETTY_FUNCTION__);
-    }
-
+    CTransaction txPrev;
+    uint256 hashBlock = uint256();
     if (!GetTransaction(prevout.hash, txPrev, Params().GetConsensus(), hashBlock, true)){
         LogPrintf("CheckKernel() : could not find previous transaction %s\n", prevout.hash.ToString());
         return false;
     }
 
-    if (mapBlockIndex.count(hashBlock) == 0) {
-        LogPrintf("CheckKernel() : could not find block of previous transaction %s\n", hashBlock.ToString());
+    if (txPrev.GetHash() != prevout.hash)
+        return error("%s() : txid mismatch in CheckProofOfStake()", __PRETTY_FUNCTION__);
+
+    // Min age requirement
+    if (block.GetBlockTime() + Params().GetConsensus().nStakeMinAge > nTime){
+        LogPrintf("CheckKernel() : stake prevout is not mature in block %s\n", hashBlock.ToString());
         return false;
-    }
+	}
 
-    CBlockIndex* pblockindex = mapBlockIndex[hashBlock];
+    uint256 hashProofOfStake = uint256();
 
-    if (Params().GetConsensus().IsProtocolV3(nTime)) {
-        if (pindexPrev->nHeight + 1 - pblockindex->nHeight < Params().GetConsensus().nCoinbaseMaturity){
-            LogPrintf("CheckKernel() : stake prevout is not mature in block %s\n", hashBlock.ToString());
-            return false;
-        }
-    }
-    else {
-        if (pblockindex->GetBlockTime() + Params().GetConsensus().nStakeMinAge > nTime) {
-            LogPrintf("CheckKernel() : only count coins meeting min age requirement, block %s\n", hashBlock.ToString());
-            return false;
-        }
-    }
-
-    if (pBlockTime)
-        *pBlockTime = pblockindex->GetBlockTime();
-
-    return CheckStakeKernelHash(pindexPrev, nBits, header, postx.nTxOffset, txPrev, prevout, nTime, hashProofOfStake);
+    return CheckStakeKernelHash(pindexPrev, block.nBits, block, postx.nTxOffset, txPrev, prevout, nTime, hashProofOfStake);
 }
