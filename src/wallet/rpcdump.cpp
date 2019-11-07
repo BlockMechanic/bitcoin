@@ -886,9 +886,10 @@ static std::string RecurseImportData(const CScript& script, ImportData& import_d
 {
     // Use Solver to obtain script type and parsed pubkeys or hashes:
     std::vector<std::vector<unsigned char>> solverdata;
-    txnouttype script_type = Solver(script, solverdata);
+    txnouttype whichType;
+    Solver(script, whichType, solverdata);
 
-    switch (script_type) {
+    switch (whichType) {
     case TX_PUBKEY: {
         CPubKey pubkey(solverdata[0].begin(), solverdata[0].end());
         import_data.used_keys.emplace(pubkey.GetID(), false);

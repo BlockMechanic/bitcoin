@@ -15,6 +15,6 @@
 class CTransaction;
 class CValidationState;
 
-bool CheckTransaction(const CTransaction& tx, CValidationState& state);
+bool CheckTransaction(const CTransaction& tx, CValidationState& state, bool fCheckDuplicateInputs=true);
 
 #endif // BITCOIN_CONSENSUS_TX_CHECK_H

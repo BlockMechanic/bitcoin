@@ -106,23 +106,23 @@ bool CheckProofOfStake(CBlockIndex* pindexPrev, CValidationState& state, const C
     Coin coinPrev;
 
     if(!view.GetCoin(txin.prevout, coinPrev)){
-        return state.Invalid(ValidationInvalidReason::CONSENSUS, false, REJECT_INVALID, "Stake prevout does not exist", strprintf(" %s ", txin.prevout.hash.ToString()));
+        return state.Invalid(ValidationInvalidReason::CONSENSUS, false, "Stake prevout does not exist", strprintf(" %s ", txin.prevout.hash.ToString()));
     }
 
     if(pindexPrev->nHeight + 1 - coinPrev.nHeight < COINBASE_MATURITY){
-        return state.Invalid(ValidationInvalidReason::CONSENSUS, false, REJECT_INVALID, "Stake prevout is not mature", strprintf("expecting %i and only matured to %i", COINBASE_MATURITY, pindexPrev->nHeight + 1 - coinPrev.nHeight));
+        return state.Invalid(ValidationInvalidReason::CONSENSUS, false, "Stake prevout is not mature", strprintf("expecting %i and only matured to %i", COINBASE_MATURITY, pindexPrev->nHeight + 1 - coinPrev.nHeight));
     }
     CBlockIndex* blockFrom = pindexPrev->GetAncestor(coinPrev.nHeight);
     if(!blockFrom) {
-        return state.Invalid(ValidationInvalidReason::CONSENSUS, false, REJECT_INVALID, "Block for prevout can not be loaded", strprintf(" Block at height %i for prevout can not be loaded ", coinPrev.nHeight));
+        return state.Invalid(ValidationInvalidReason::CONSENSUS, false, "Block for prevout can not be loaded", strprintf(" Block at height %i for prevout can not be loaded ", coinPrev.nHeight));
     }
 
     // Verify signature
     if (!VerifySignature(coinPrev, txin.prevout.hash, tx, 0, SCRIPT_VERIFY_NONE))
-        return state.Invalid(ValidationInvalidReason::CONSENSUS, false, REJECT_INVALID, "VerifySignature failed", strprintf(" VerifySignature failed on coinstake %s ", tx.GetHash().ToString()));
+        return state.Invalid(ValidationInvalidReason::CONSENSUS, false, "VerifySignature failed", strprintf(" VerifySignature failed on coinstake %s ", tx.GetHash().ToString()));
 
     if (!CheckStakeKernelHash(pindexPrev, nBits, blockFrom->nTime, coinPrev.out.nValue, txin.prevout, nTimeBlock, hashProofOfStake, targetProofOfStake, LogInstance().WillLogCategory(BCLog::COINSTAKE)))
-        return state.Invalid(ValidationInvalidReason::CONSENSUS, false, REJECT_INVALID, "check kernel failed on coinstake", strprintf(" check kernel failed on coinstake %s, hashProof=%s ",  tx.GetHash().ToString(), hashProofOfStake.ToString()));
+        return state.Invalid(ValidationInvalidReason::CONSENSUS, false, "check kernel failed on coinstake", strprintf(" check kernel failed on coinstake %s, hashProof=%s ",  tx.GetHash().ToString(), hashProofOfStake.ToString()));
 
     return true;
 }

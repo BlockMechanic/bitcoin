@@ -13,6 +13,7 @@
 #include <util/system.h>
 #include <util/translation.h>
 #include <util/vector.h>
+#include <validation.h>
 
 #include <stdint.h>
 
@@ -459,7 +460,7 @@ bool CBlockTreeDB::LoadBlockIndexGuts(const Consensus::Params& consensusParams, 
 
                 // NovaCoin: build setStakeSeen
                 if (pindexNew->IsProofOfStake())
-                    setStakeSeen.insert(std::make_pair(pindexNew->prevoutStake, pindexNew->nTime));
+                    ::ChainstateActive().setStakeSeen.insert(std::make_pair(pindexNew->prevoutStake, pindexNew->nTime));
 
                 pcursor->Next();
             } else {

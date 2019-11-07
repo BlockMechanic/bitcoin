@@ -524,8 +524,11 @@ bool CWallet::LoadCScript(const CScript& redeemScript)
 static bool ExtractPubKey(const CScript &dest, CPubKey& pubKeyOut)
 {
     std::vector<std::vector<unsigned char>> solutions;
-    return Solver(dest, solutions) == TX_PUBKEY &&
-        (pubKeyOut = CPubKey(solutions[0])).IsFullyValid();
+    txnouttype whichtype;
+    if (Solver(dest, whichtype, solutions))
+        return whichtype == TX_PUBKEY && (pubKeyOut = CPubKey(solutions[0])).IsFullyValid();
+    else
+       return false;
 }
 
 bool CWallet::AddWatchOnlyInMem(const CScript &dest)
@@ -3102,7 +3105,7 @@ bool CWallet::CreateTransaction(interfaces::Chain::Lock& locked_chain, const std
                 scriptChange = GetScriptForDestination(dest);
             }
             CTxOut change_prototype_txout(0, scriptChange);
-            coin_selection_params.change_output_size = GetSerializeSize(change_prototype_txout);
+            coin_selection_params.change_output_size = GetSerializeSize(change_prototype_txout, SER_DISK, 0);
 
             CFeeRate discard_rate = GetDiscardRate(*this);
 

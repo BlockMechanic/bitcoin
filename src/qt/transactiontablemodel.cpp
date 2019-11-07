@@ -378,6 +378,13 @@ QVariant TransactionTableModel::txAddressDecoration(const TransactionRecord *wtx
     }
 }
 
+QVariant TransactionTableModel::typeDecoration(const TransactionRecord *wtx) const
+{
+    //if(!wtx->status.fValidated)
+    //    return QIcon(":/icons/tx_spv");
+    return QVariant();
+}
+
 QString TransactionTableModel::formatTxToAddress(const TransactionRecord *wtx, bool tooltip) const
 {
     QString watchAddress;

@@ -158,6 +158,8 @@ public:
 bool IsDeprecatedRPCEnabled(const std::string& method);
 
 extern CRPCTable tableRPC;
+extern double GetPoWMHashPS();
+extern double GetPoSKernelPS();
 
 void StartRPC();
 void InterruptRPC();

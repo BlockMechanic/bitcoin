@@ -9,7 +9,9 @@
 #include <banman.h>
 #include <blockencodings.h>
 #include <chainparams.h>
+#include <checkpoints.h>
 #include <consensus/validation.h>
+#include <consensus/merkle.h>
 #include <hash.h>
 #include <validation.h>
 #include <merkleblock.h>
@@ -94,8 +96,16 @@ std::map<uint256, COrphanTx> mapOrphanTransactions GUARDED_BY(g_cs_orphans);
 
 void EraseOrphansFor(NodeId peer);
 
-/** Increase a node's misbehavior score. */
-void Misbehaving(NodeId nodeid, int howmuch, const std::string& message="") EXCLUSIVE_LOCKS_REQUIRED(cs_main);
+struct COrphanBlock {
+    uint256 hashBlock;
+    uint256 hashPrev;
+    std::pair<COutPoint, unsigned int> stake;
+    std::vector<unsigned char> vchBlock;
+};
+std::map<uint256, COrphanBlock*> mapOrphanBlocks GUARDED_BY(cs_main);
+std::multimap<uint256, COrphanBlock*> mapOrphanBlocksByPrev GUARDED_BY(cs_main);
+std::set<std::pair<COutPoint, unsigned int>> setStakeSeenOrphan GUARDED_BY(cs_main);
+size_t nOrphanBlocksSize = 0;
 
 /** Average delay between local address broadcasts in seconds. */
 static constexpr unsigned int AVG_LOCAL_ADDRESS_BROADCAST_INTERVAL = 24 * 60 * 60;
@@ -2800,7 +2810,7 @@ bool static ProcessMessage(CNode* pfrom, const std::string& strCommand, CDataStr
             // we have a chain with at least nMinimumChainWork), and we ignore
             // compact blocks with less work than our tip, it is safe to treat
             // reconstructed compact blocks as having been requested.
-            ProcessNetBlock(chainparams, pblock, /*fForceProcessing=*/true, &fNewBlock, pfrom, *connman, !result.fPriorityRequest);
+            ProcessNetBlock(chainparams, pblock, /*fForceProcessing=*/true, &fNewBlock, pfrom, *connman);
             if (fNewBlock) {
                 pfrom->nLastBlockTime = GetTime();
             } else {
@@ -2890,7 +2900,7 @@ bool static ProcessMessage(CNode* pfrom, const std::string& strCommand, CDataStr
             // disk-space attacks), but this should be safe due to the
             // protections in the compact block handler -- see related comment
             // in compact block optimistic reconstruction handling.
-            ProcessNetBlock(chainparams, pblock, /*fForceProcessing=*/true, &fNewBlock, pfrom, *connman, !result.fPriorityRequest);
+            ProcessNetBlock(chainparams, pblock, /*fForceProcessing=*/true, &fNewBlock, pfrom, *connman);
             if (fNewBlock) {
                 pfrom->nLastBlockTime = GetTime();
             } else {
@@ -2953,7 +2963,7 @@ bool static ProcessMessage(CNode* pfrom, const std::string& strCommand, CDataStr
             mapBlockSource.emplace(hash, std::make_pair(pfrom->GetId(), true));
         }
         bool fNewBlock = false;
-        ProcessNetBlock(chainparams, pblock, forceProcessing, &fNewBlock, pfrom, *connman, !result.fPriorityRequest);
+        ProcessNetBlock(chainparams, pblock, forceProcessing, &fNewBlock, pfrom, *connman);
         if (fNewBlock) {
             pfrom->nLastBlockTime = GetTime();
         } else {
@@ -4141,7 +4151,7 @@ void static PruneOrphanBlocks() EXCLUSIVE_LOCKS_REQUIRED(cs_main)
     }
 }
 
-bool ProcessNetBlock(const CChainParams& chainparams, const std::shared_ptr<const CBlock> pblock, bool fForceProcessing, bool* fNewBlock, CNode* pfrom, CConnman& connman, bool fPriorityRequest)
+bool ProcessNetBlock(const CChainParams& chainparams, const std::shared_ptr<const CBlock> pblock, bool fForceProcessing, bool* fNewBlock, CNode* pfrom, CConnman& connman)
 {
     {
         // Check that the coinstake transaction exist in the received block
@@ -4171,7 +4181,7 @@ bool ProcessNetBlock(const CChainParams& chainparams, const std::shared_ptr<cons
         // ppcoin: check proof-of-stake
         // Limited duplicity on stake: prevents block flood attack
         // Duplicate stake allowed only when there is orphan child block
-        if (!fReindex && !fImporting && pblock->IsProofOfStake() && (setStakeSeen.count(pblock->GetProofOfStake()) > 1) && !mapOrphanBlocksByPrev.count(hash))
+        if (!fReindex && !fImporting && pblock->IsProofOfStake() && (::ChainstateActive().setStakeSeen.count(pblock->GetProofOfStake()) > 1) && !mapOrphanBlocksByPrev.count(hash))
             return error("ProcessNetBlock() : duplicate proof-of-stake (%s, %d) for block %s", pblock->GetProofOfStake().first.ToString(), pblock->GetProofOfStake().second, hash.ToString());
 
         // Check for the checkpoint
@@ -4199,7 +4209,7 @@ bool ProcessNetBlock(const CChainParams& chainparams, const std::shared_ptr<cons
         }
 
         // If we don't already have its previous block, shunt it off to holding area until we get it
-        if (!mapBlockIndex.count(pblock->hashPrevBlock))
+        if (!::ChainstateActive().m_blockman.m_block_index.count(pblock->hashPrevBlock))
         {
             LogPrintf("ProcessNetBlock: ORPHAN BLOCK %lu, prev=%s\n", (unsigned long)mapOrphanBlocks.size(), pblock->hashPrevBlock.ToString());
 

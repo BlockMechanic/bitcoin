@@ -11,6 +11,7 @@
 #include <script/interpreter.h>
 #include <script/keyorigin.h>
 #include <streams.h>
+#include <coins.h>
 
 class CKey;
 class CKeyID;
@@ -79,7 +80,7 @@ struct SignatureData {
 template<typename Stream, typename... X>
 void SerializeToVector(Stream& s, const X&... args)
 {
-    WriteCompactSize(s, GetSerializeSizeMany(s.GetVersion(), args...));
+    WriteCompactSize(s, GetSerializeSizeMany(s, args...));
     SerializeMany(s, args...);
 }
 

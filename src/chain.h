@@ -186,10 +186,10 @@ public:
     uint32_t nNonce{0};
 
     // block signature - proof-of-stake protect the block by signing the block using a stake holder private key
-    std::vector<unsigned char> vchBlockSig{nullptr};
+    COutPoint prevoutStake{};
+    std::vector<unsigned char> vchBlockSig{};
     uint256 nStakeModifier{};
     // proof-of-stake specific fields
-    COutPoint prevoutStake{nullptr};
     uint256 hashProof{}; 
     uint64_t nMoneySupply{0};
 
@@ -208,12 +208,9 @@ public:
           hashMerkleRoot{block.hashMerkleRoot},
           nTime{block.nTime},
           nBits{block.nBits},
-          nNonce{block.nNonce}
-          nMoneySupply   = {block.nMoneySupply};
-          nStakeModifier = {block.nStakeModifier};
-          hashProof = {block.hashProof}; 
-          prevoutStake   = {block.prevoutStake}; 
-          vchBlockSig    = {block.vchBlockSig}; 
+          nNonce{block.nNonce},
+          prevoutStake{block.prevoutStake},
+          vchBlockSig{block.vchBlockSig}
     {
     }
 
@@ -288,6 +285,16 @@ public:
 
         std::sort(pbegin, pend);
         return pbegin[(pend - pbegin)/2];
+    }
+
+    bool IsProofOfWork() const
+    {
+        return !IsProofOfStake();
+    }
+
+    bool IsProofOfStake() const
+    {
+        return !prevoutStake.IsNull();
     }
 
     std::string ToString() const

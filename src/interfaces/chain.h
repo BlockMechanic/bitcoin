@@ -13,6 +13,11 @@
 #include <stdint.h>
 #include <string>
 #include <vector>
+#include <validation.h>
+#include <pos.h>
+
+#include <boost/thread.hpp>
+
 
 class CBlock;
 class CFeeRate;

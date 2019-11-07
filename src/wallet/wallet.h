@@ -22,6 +22,7 @@
 #include <wallet/walletdb.h>
 #include <wallet/walletutil.h>
 
+
 #include <algorithm>
 #include <atomic>
 #include <map>
@@ -282,7 +283,7 @@ public:
  * If an address is reserved and KeepDestination() is not called, then the address will be
  * returned when the ReserveDestination goes out of scope.
  */
-class ReserveDestination
+class ReserveDestination  final : public CReserveScript
 {
 protected:
     //! The wallet to reserve from
@@ -892,8 +893,10 @@ private:
     //! Fetches a key from the keypool
     bool GetKeyFromPool(CPubKey &key, bool internal = false);
 
+    boost::thread_group* stakeThread = nullptr;
     void Stake(bool fStake);
     std::atomic<bool> spvEnabled;
+
 public:
     /*
      * Main wallet lock.
@@ -991,6 +994,12 @@ public:
      * populate vCoins with vector of available COutputs.
      */
     void AvailableCoins(interfaces::Chain::Lock& locked_chain, std::vector<COutput>& vCoins, bool fOnlySafe = true, const CCoinControl* coinControl = nullptr, const CAmount& nMinimumAmount = 1, const CAmount& nMaximumAmount = MAX_MONEY, const CAmount& nMinimumSumAmount = MAX_MONEY, const uint64_t nMaximumCount = 0) const EXCLUSIVE_LOCKS_REQUIRED(cs_wallet);
+
+    //! select coins for staking from the available coins for staking.
+    bool SelectCoinsForStaking(CAmount& nTargetValue, std::set<std::pair<const CWalletTx*,unsigned int> >& setCoinsRet, CAmount& nValueRet) const;
+
+    void AvailableCoinsForStaking(std::vector<COutput>& vCoins) const;
+    bool HaveAvailableCoinsForStaking() const;
 
     /**
      * Return list of available coins and locked coins grouped by non-change output address.
@@ -1106,6 +1115,7 @@ public:
 
     void MarkDirty();
     bool AddToWallet(const CWalletTx& wtxIn, bool fFlushOnClose=true);
+    void GetNonMempoolTransaction(const uint256 &hash, CTransactionRef &txsp);
     void LoadToWallet(CWalletTx& wtxIn) EXCLUSIVE_LOCKS_REQUIRED(cs_wallet);
     void TransactionAddedToMempool(const CTransactionRef& tx) override;
     void BlockConnected(const CBlock& block, const std::vector<CTransactionRef>& vtxConflicted) override;

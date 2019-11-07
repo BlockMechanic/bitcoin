@@ -9,7 +9,10 @@
 #include <net.h>
 #include <validationinterface.h>
 #include <consensus/params.h>
+#include <consensus/consensus.h>
 #include <sync.h>
+
+class CChainParams;
 
 extern CCriticalSection cs_main;
 
@@ -18,6 +21,8 @@ static const unsigned int DEFAULT_MAX_ORPHAN_TRANSACTIONS = 100;
 /** Default number of orphan+recently-replaced txn to keep around for block reconstruction */
 static const unsigned int DEFAULT_BLOCK_RECONSTRUCTION_EXTRA_TXN = 100;
 static const bool DEFAULT_PEERBLOOMFILTERS = false;
+
+static const unsigned int DEFAULT_MAX_ORPHAN_BLOCKS = 40;
 
 class PeerLogicValidation final : public CValidationInterface, public NetEventsInterface {
 private:
@@ -87,7 +92,7 @@ struct CNodeStateStats {
 bool GetNodeStateStats(NodeId nodeid, CNodeStateStats &stats);
 
 /** Process network block received from a given node */
-bool ProcessNetBlock(const CChainParams& chainparams, const std::shared_ptr<const CBlock> pblock, bool fForceProcessing, bool* fNewBlock, CNode* pfrom, CConnman& connman, bool fPriorityRequest = false);
+bool ProcessNetBlock(const CChainParams& chainparams, const std::shared_ptr<const CBlock> pblock, bool fForceProcessing, bool* fNewBlock, CNode* pfrom, CConnman& connman);
 /** Relay transaction to every node */
 void RelayTransaction(const uint256&, const CConnman& connman);
 

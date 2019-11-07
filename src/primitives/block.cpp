@@ -7,7 +7,7 @@
 
 #include <hash.h>
 #include <tinyformat.h>
-
+#include <util/strencodings.h>
 uint256 CBlockHeader::GetHash() const
 {
     return SerializeHash(*this);

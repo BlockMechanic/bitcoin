@@ -15,7 +15,9 @@
 #include <net.h>
 #include <policy/fees.h>
 #include <pow.h>
+#include <pos.h>
 #include <rpc/blockchain.h>
+#include <rpc/mining.h>
 #include <rpc/server.h>
 #include <rpc/util.h>
 #include <script/script.h>
@@ -31,6 +33,11 @@
 #include <versionbitsinfo.h>
 #include <warnings.h>
 
+#ifdef ENABLE_WALLET
+#include <wallet/wallet.h>
+#include <wallet/walletdb.h>
+#include <wallet/rpcwallet.h>
+#endif
 #include <memory>
 #include <stdint.h>
 
@@ -174,6 +181,19 @@ static UniValue generatetoaddress(const JSONRPCRequest& request)
     CScript coinbase_script = GetScriptForDestination(destination);
 
     return generateBlocks(coinbase_script, nGenerate, nMaxTries);
+}
+
+static UniValue getsubsidy(const JSONRPCRequest& request)
+{
+    if (request.fHelp || request.params.size() > 1)
+        throw std::runtime_error(
+            "getsubsidy [nTarget]\n"
+            "Returns subsidy value for the specified value of target.");
+    int nTarget = request.params.size() == 1 ? request.params[0].get_int() : ::ChainActive().Height();
+    if (nTarget < 0)
+        throw JSONRPCError(RPC_INVALID_PARAMETER, "Block height out of range");
+    const Consensus::Params& consensusParams = Params().GetConsensus();
+    return (uint64_t)GetBlockSubsidy(nTarget, consensusParams);
 }
 
 static UniValue getmininginfo(const JSONRPCRequest& request)

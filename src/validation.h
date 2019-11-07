@@ -31,6 +31,8 @@
 #include <utility>
 #include <vector>
 
+using valtype = std::vector<unsigned char>;
+
 class CChainState;
 class CBlockIndex;
 class CBlockTreeDB;
@@ -42,6 +44,7 @@ class CScriptCheck;
 class CBlockPolicyEstimator;
 class CTxMemPool;
 class CValidationState;
+class CWallet;
 struct ChainTxData;
 
 struct DisconnectedBlockTransactions;
@@ -459,7 +462,6 @@ void UpdateUncommittedBlockStructures(CBlock& block, const CBlockIndex* pindexPr
 /** Produce the necessary coinbase commitment for a block (modifies the hash, don't call for mined blocks). */
 std::vector<unsigned char> GenerateCoinbaseCommitment(CBlock& block, const CBlockIndex* pindexPrev, const Consensus::Params& consensusParams, bool fProofOfStake=false);
 
-int GetWitnessCommitmentIndex(const CBlock& block);
 bool CheckHeaderPoS(const CBlockHeader& block, const Consensus::Params& consensusParams) EXCLUSIVE_LOCKS_REQUIRED(cs_main);
 
 /** RAII wrapper for VerifyDB: Verify consistency of the block and coin databases */
@@ -646,15 +648,15 @@ private:
      */
     mutable std::atomic<bool> m_cached_finished_ibd{false};
 
+    //! Manages the UTXO set, which is a reflection of the contents of `m_chain`.
+    std::unique_ptr<CoinsViews> m_coins_views;
+
+public:
     //! Reference to a BlockManager instance which itself is shared across all
     //! CChainState instances. Keeping a local reference allows us to test more
     //! easily as opposed to referencing a global.
     BlockManager& m_blockman;
 
-    //! Manages the UTXO set, which is a reflection of the contents of `m_chain`.
-    std::unique_ptr<CoinsViews> m_coins_views;
-
-public:
     CChainState(BlockManager& blockman) : m_blockman(blockman) {}
     CChainState();
 

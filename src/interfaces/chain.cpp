@@ -8,6 +8,7 @@
 #include <chainparams.h>
 #include <interfaces/handler.h>
 #include <interfaces/wallet.h>
+#include <miner.h>
 #include <net.h>
 #include <net_processing.h>
 #include <node/coin.h>
@@ -113,10 +114,10 @@ class LockImpl : public Chain::Lock, public UniqueLock<CCriticalSection>
 		
 	}    
     void cacheKernel(std::map<COutPoint, CStakeCache>& cache, const COutPoint& prevout) override {
-		CacheKernel(cache, prevout, *pcoinsTip);
+		CacheKernel(cache, prevout, ::ChainstateActive().CoinsTip());
 	}
 	bool checkKernel(unsigned int nBits, uint32_t nTimeBlock, const COutPoint& prevout, const std::map<COutPoint, CStakeCache>& cache) override {
-		return CheckKernel(nBits,nTimeBlock,prevout, *pcoinsTip,cache);		
+		return CheckKernel(nBits,nTimeBlock,prevout, ::ChainstateActive().CoinsTip(),cache);		
 	}
     Optional<int> findFirstBlockWithTimeAndHeight(int64_t time, int height, uint256* hash) override
     {

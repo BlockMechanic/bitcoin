@@ -33,6 +33,8 @@
 #include <validation.h>
 #include <validationinterface.h>
 #include <warnings.h>
+#include <pos.h>
+#include <pow.h>
 
 #include <assert.h>
 #include <stdint.h>

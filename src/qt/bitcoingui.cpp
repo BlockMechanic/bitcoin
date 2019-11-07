@@ -18,6 +18,7 @@
 #include <qt/platformstyle.h>
 #include <qt/rpcconsole.h>
 #include <qt/utilitydialog.h>
+#include <rpc/server.h>
 
 #ifdef ENABLE_WALLET
 #include <qt/walletcontroller.h>
@@ -1226,6 +1227,8 @@ void BitcoinGUI::setHDStatus(bool privkeyDisabled, int hdEnabled)
 
 void BitcoinGUI::setEncryptionStatus(int status)
 {
+    WalletView * const walletView = walletFrame->currentWalletView();
+    WalletModel * const walletModel = walletView->getWalletModel();
     switch(status)
     {
     case WalletModel::Unencrypted:

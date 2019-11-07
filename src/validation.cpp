@@ -8,6 +8,7 @@
 #include <arith_uint256.h>
 #include <chain.h>
 #include <chainparams.h>
+#include <checkpoints.h>
 #include <checkqueue.h>
 #include <consensus/consensus.h>
 #include <consensus/merkle.h>
@@ -44,6 +45,7 @@
 #include <util/translation.h>
 #include <util/validation.h>
 #include <validationinterface.h>
+#include <wallet/wallet.h>
 #include <warnings.h>
 
 #include <string>
@@ -1127,16 +1129,16 @@ bool CheckHeaderPoS(const CBlockHeader& block, const Consensus::Params& consensu
     // Check for proof of stake block header
     // Get prev block index
 
-    BlockMap::iterator mi = mapBlockIndex.find(block.hashPrevBlock);
-    if (mi == mapBlockIndex.end())
+    BlockMap::iterator mi = g_blockman.m_block_index.find(block.hashPrevBlock);
+    if (mi == g_blockman.m_block_index.end())
         return false;
     // Check the kernel hash
     CBlockIndex* pindexPrev = (*mi).second;
-    if(!CheckRecoveredPubKeyFromBlockSignature(pindexPrev, block, *pcoinsTip)) {
+    if(!CheckRecoveredPubKeyFromBlockSignature(pindexPrev, block, ::ChainstateActive().CoinsTip())) {
         return error("Failed signature check");
     }
 
-    return CheckKernel(block.nBits, block.StakeTime(), block.prevoutStake, *pcoinsTip);
+    return CheckKernel(block.nBits, block.StakeTime(), block.prevoutStake, ::ChainstateActive().CoinsTip());
 }
 
 bool CheckHeaderProof(const CBlockHeader& block, const Consensus::Params& consensusParams)EXCLUSIVE_LOCKS_REQUIRED(cs_main) {
@@ -2340,7 +2342,7 @@ bool CChainState::ConnectBlock(const CBlock& block, CValidationState& state, CBl
 
         if(pindex->nHeight > 1 && block.vtx[0]->GetValueOut() > GetBlockSubsidy(pindex->nHeight, chainparams.GetConsensus()))
             return state.Invalid(ValidationInvalidReason::CONSENSUS, error("ConnectBlock(): coinbase pays too much (actual=%d vs limit=%d , at height =%d)",
-                               block.vtx[0]->GetValueOut(), GetBlockSubsidy(pindex->nHeight, chainparams.GetConsensus()), pindex->nHeight), REJECT_INVALID, "bad-cb-amount");
+                               block.vtx[0]->GetValueOut(), GetBlockSubsidy(pindex->nHeight, chainparams.GetConsensus()), pindex->nHeight), "bad-cb-amount");
 
 	}
 
@@ -2354,13 +2356,13 @@ bool CChainState::ConnectBlock(const CBlock& block, CValidationState& state, CBl
 			    paidToDev=true;
 
         if(nActualStakeReward != blockReward)
-            return state.Invalid(ValidationInvalidReason::CONSENSUS, error("ConnectBlock(): coinstake pays too much (actual=%d vs limit=%d)", nActualStakeReward, blockReward), REJECT_INVALID, "bad-cs-amount");
+            return state.Invalid(ValidationInvalidReason::CONSENSUS, error("ConnectBlock(): coinstake pays too much (actual=%d vs limit=%d)", nActualStakeReward, blockReward), "bad-cs-amount");
 
     }
 
 
 	if (block.GetHash() != Params().GetConsensus().hashGenesisBlock && !paidToDev)
-        return state.Invalid(ValidationInvalidReason::CONSENSUS, false, REJECT_INVALID, "missing-dev-subsidy", "developer subsidy is  missing");
+        return state.Invalid(ValidationInvalidReason::CONSENSUS, false, "missing-dev-subsidy", "developer subsidy is  missing");
 
     if (!control.Wait())
         return state.Invalid(ValidationInvalidReason::CONSENSUS, error("%s: CheckQueue failed", __func__), "block-validation-failed");
@@ -2376,7 +2378,7 @@ bool CChainState::ConnectBlock(const CBlock& block, CValidationState& state, CBl
         //sanity check in case an exploit happens that allows new coins to be minted
         if(pindex->nMoneySupply > (uint64_t)(100000000 + ((pindex->nHeight - 5000) * 4)) * COIN){
 			return state.Invalid(ValidationInvalidReason::CONSENSUS,
-                         error("ConnectBlock(): Unknown error caused actual money supply to exceed expected money supply)"), REJECT_INVALID, "incorrect-money-supply");
+                         error("ConnectBlock(): Unknown error caused actual money supply to exceed expected money supply)"), "incorrect-money-supply");
         }
     }
 
@@ -3323,7 +3325,7 @@ CBlockIndex* BlockManager::AddToBlockIndex(const CBlockHeader& block)
     pindexNew->nSequenceId = 0;
     BlockMap::iterator mi = m_block_index.insert(std::make_pair(hash, pindexNew)).first;
     if (pindexNew->IsProofOfStake())
-        setStakeSeen.insert(std::make_pair(pindexNew->prevoutStake, pindexNew->nTime));
+        ::ChainstateActive().setStakeSeen.insert(std::make_pair(pindexNew->prevoutStake, pindexNew->nTime));
 
     pindexNew->phashBlock = &((*mi).first);
     BlockMap::iterator miPrev = m_block_index.find(block.hashPrevBlock);
@@ -3659,28 +3661,28 @@ bool CheckBlock(const CBlock& block, CValidationState& state, const Consensus::P
     {
         // Coinbase output should be empty if proof-of-stake block
         if (!CheckFirstCoinstakeOutput(block))
-			return state.Invalid(ValidationInvalidReason::CONSENSUS, false, REJECT_INVALID, "bad-cb-missing", "coinbase output not empty for proof-of-stake block");
+			return state.Invalid(ValidationInvalidReason::CONSENSUS, false, "bad-cb-missing", "coinbase output not empty for proof-of-stake block");
 
         // Second transaction must be coinstake
         if (block.vtx.empty() || block.vtx.size() < 2 || !block.vtx[1]->IsCoinStake())
-            return state.Invalid(ValidationInvalidReason::CONSENSUS, false, REJECT_INVALID, "bad-cs-missing", "second tx is not coinstake");
+            return state.Invalid(ValidationInvalidReason::CONSENSUS, false, "bad-cs-missing", "second tx is not coinstake");
 
 
         //prevoutStake must exactly match the coinstake in the block body
         if(block.vtx[1]->vin.empty() || block.prevoutStake != block.vtx[1]->vin[0].prevout){
-            return state.Invalid(ValidationInvalidReason::CONSENSUS, false, REJECT_INVALID, "bad-cs-invalid", "prevoutStake in block header does not match coinstake in block body");
+            return state.Invalid(ValidationInvalidReason::CONSENSUS, false, "bad-cs-invalid", "prevoutStake in block header does not match coinstake in block body");
         }
         //the rest of the transactions must not be coinstake
         for (unsigned int i = 2; i < block.vtx.size(); i++)
             if (block.vtx[i]->IsCoinStake())
-               return state.Invalid(ValidationInvalidReason::CONSENSUS, false, REJECT_INVALID, "bad-cs-multiple", "more than one coinstake");
+               return state.Invalid(ValidationInvalidReason::CONSENSUS, false, "bad-cs-multiple", "more than one coinstake");
         //Don't allow contract opcodes in coinstake
         //We might allow this later, but it hasn't been tested enough to determine if safe
     }
 
     // Check proof-of-stake block signature
     if (fCheckSig && !CheckBlockSignature(block))
-			return state.Invalid(ValidationInvalidReason::CONSENSUS, false, REJECT_INVALID, "bad-blk-signature", "bad proof-of-stake block signature");
+			return state.Invalid(ValidationInvalidReason::CONSENSUS, false, "bad-blk-signature", "bad proof-of-stake block signature");
 
     unsigned int nSigOps = 0;
     for (const auto& tx : block.vtx)
@@ -3727,7 +3729,7 @@ void UpdateUncommittedBlockStructures(CBlock& block, const CBlockIndex* pindexPr
     }
 }
 
-std::vector<unsigned char> GenerateCoinbaseCommitment(CBlock& block, const CBlockIndex* pindexPrev, const Consensus::Params& consensusParams)
+std::vector<unsigned char> GenerateCoinbaseCommitment(CBlock& block, const CBlockIndex* pindexPrev, const Consensus::Params& consensusParams, bool fProofOfStake)
 {
     std::vector<unsigned char> commitment;
     int commitpos = GetWitnessCommitmentIndex(block);
@@ -3867,7 +3869,7 @@ static bool ContextualCheckBlock(const CBlock& block, CValidationState& state, c
     //   {0xaa, 0x21, 0xa9, 0xed}, and the following 32 bytes are SHA256^2(witness root, witness reserved value). In case there are
     //   multiple, the last one is used.
     bool fHaveWitness = false;
-    bool fProofOfStake = block.IsProofOfStake();
+//    bool fProofOfStake = block.IsProofOfStake();
     if (nHeight >= consensusParams.SegwitHeight) {
         int commitpos = GetWitnessCommitmentIndex(block);
         if (commitpos != -1) {
@@ -3917,15 +3919,15 @@ bool CChainState::UpdateHashProof(const CBlock& block, CValidationState& state, 
 
     //reject proof of work at height consensusParams.nLastPOWBlock
     if (block.IsProofOfWork() && nHeight > consensusParams.nLastPOWBlock)
-        return state.Invalid(ValidationInvalidReason::CONSENSUS, false, REJECT_INVALID, "reject proof-of-work ", strprintf("%s : UpdateHashProof() : reject proof-of-work at height %d", __func__, nHeight));
+        return state.Invalid(ValidationInvalidReason::CONSENSUS, false, "reject proof-of-work ", strprintf("%s : UpdateHashProof() : reject proof-of-work at height %d", __func__, nHeight));
 
     // Check coinstake timestamp
     if (block.IsProofOfStake() && !CheckCoinStakeTimestamp(block.GetBlockTime()))
-		return state.Invalid(ValidationInvalidReason::CONSENSUS, false, REJECT_INVALID, "coinstake timestamp violation ", strprintf("%s : UpdateHashProof() : coinstake timestamp violation nTimeBlock %d", __func__, block.GetBlockTime()));
+		return state.Invalid(ValidationInvalidReason::CONSENSUS, false, "coinstake timestamp violation ", strprintf("%s : UpdateHashProof() : coinstake timestamp violation nTimeBlock %d", __func__, block.GetBlockTime()));
 
     // Check proof-of-work or proof-of-stake
     if (block.nBits != GetNextWorkRequired(pindex->pprev, &block, consensusParams,block.IsProofOfStake()))
-        return state.Invalid(ValidationInvalidReason::CONSENSUS, false, REJECT_INVALID, "incorrect pow/pos", "incorrect difficulty");
+        return state.Invalid(ValidationInvalidReason::CONSENSUS, false, "incorrect pow/pos", "incorrect difficulty");
 
     uint256 hashProof;
     // Verify hash target and signature of coinstake tx
@@ -4001,7 +4003,7 @@ bool BlockManager::AcceptBlockHeader(const CBlockHeader& block, CValidationState
         // Check for the signiture encoding
         if (!CheckCanonicalBlockSignature(&block))
         {
-			return state.Invalid(ValidationInvalidReason::CONSENSUS, false, REJECT_INVALID, "bad-signature-encoding", "bad block signature encoding");
+			return state.Invalid(ValidationInvalidReason::CONSENSUS, false, "bad-signature-encoding", "bad block signature encoding");
 
         }
 
@@ -4057,17 +4059,17 @@ bool BlockManager::AcceptBlockHeader(const CBlockHeader& block, CValidationState
         // Reject proof of work at height consensusParams.nLastPOWBlock
         int nHeight = pindexPrev->nHeight + 1;
         if (block.IsProofOfWork() && nHeight > chainparams.GetConsensus().nLastPOWBlock)
-			return state.Invalid(ValidationInvalidReason::CONSENSUS, false, REJECT_INVALID, "reject-pow", strprintf("%s : reject proof-of-work at height %d", __func__, nHeight));
+			return state.Invalid(ValidationInvalidReason::CONSENSUS, false, "reject-pow", strprintf("%s : reject proof-of-work at height %d", __func__, nHeight));
 
         if(block.IsProofOfStake())
         {
             // Reject proof of stake before height COINBASE_MATURITY
             if (nHeight < COINBASE_MATURITY)
-				return state.Invalid(ValidationInvalidReason::CONSENSUS, false, REJECT_INVALID, "reject-pos", strprintf("%s : reject proof-of-stake at height %d", __func__, nHeight));
+				return state.Invalid(ValidationInvalidReason::CONSENSUS, false, "reject-pos", strprintf("%s : reject proof-of-stake at height %d", __func__, nHeight));
 
             // Check coin stake timestamp
             if(!CheckCoinStakeTimestamp(block.nTime))
-				return state.Invalid(ValidationInvalidReason::BLOCK_INVALID_HEADER, false, REJECT_INVALID, "timestamp-invalid", "proof of stake failed due to invalid timestamp");
+				return state.Invalid(ValidationInvalidReason::BLOCK_INVALID_HEADER, false, "timestamp-invalid", "proof of stake failed due to invalid timestamp");
 
         }
 
@@ -4083,7 +4085,7 @@ bool BlockManager::AcceptBlockHeader(const CBlockHeader& block, CValidationState
     if (ppindex)
         *ppindex = pindex;
 
-    CheckBlockIndex(chainparams.GetConsensus());
+    ::ChainstateActive().CheckBlockIndex(chainparams.GetConsensus());
 
     return true;
 }
@@ -4153,7 +4155,7 @@ bool CChainState::AcceptBlock(const std::shared_ptr<const CBlock>& pblock, CVali
         return false;
 
     if(block.IsProofOfWork()) {
-        if (!UpdateHashProof(block, state, chainparams.GetConsensus(), pindex, *pcoinsTip))
+        if (!UpdateHashProof(block, state, chainparams.GetConsensus(), pindex, ::ChainstateActive().CoinsTip()))
         {
             return error("%s: AcceptBlock(): %s", __func__, state.GetRejectReason().c_str());
         }
@@ -4162,8 +4164,8 @@ bool CChainState::AcceptBlock(const std::shared_ptr<const CBlock>& pblock, CVali
     // Get prev block index
     CBlockIndex* pindexPrev = nullptr;
     if(pindex->nHeight > 0){
-        BlockMap::iterator mi = mapBlockIndex.find(block.hashPrevBlock);
-        if (mi == mapBlockIndex.end())
+        BlockMap::iterator mi = g_blockman.m_block_index.find(block.hashPrevBlock);
+        if (mi == g_blockman.m_block_index.end())
             return error("AcceptBlock() : prev block not found");
         pindexPrev = (*mi).second;
     }
@@ -4173,7 +4175,7 @@ bool CChainState::AcceptBlock(const std::shared_ptr<const CBlock>& pblock, CVali
 
     // Check for the last proof of work block
     if (block.IsProofOfWork() && nHeight > chainparams.GetConsensus().nLastPOWBlock)
-			return state.Invalid(ValidationInvalidReason::CONSENSUS, false, REJECT_INVALID, "reject proof-of-work", "pow ended");
+			return state.Invalid(ValidationInvalidReason::CONSENSUS, false, "reject proof-of-work", "pow ended");
 
     // Check that the block satisfies synchronized checkpoint
     if (!Checkpoints::CheckSync(nHeight))
@@ -4193,7 +4195,7 @@ bool CChainState::AcceptBlock(const std::shared_ptr<const CBlock>& pblock, CVali
         CScript expect = CScript() << nHeight;
         if (block.vtx[0]->vin[0].scriptSig.size() < expect.size() ||
             !std::equal(expect.begin(), expect.end(), block.vtx[0]->vin[0].scriptSig.begin()))
-			return state.Invalid(ValidationInvalidReason::CONSENSUS, false, REJECT_INVALID, "block height mismatch", "block height mismatch in coinbase");
+			return state.Invalid(ValidationInvalidReason::CONSENSUS, false, "block height mismatch", "block height mismatch in coinbase");
 
     }
 
