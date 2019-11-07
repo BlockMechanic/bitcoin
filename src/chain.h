@@ -146,6 +146,9 @@ public:
     CBlockIndex* pprev{nullptr};
 
     //! pointer to the index of some further predecessor of this block
+    CBlockIndex* pnext{nullptr};
+
+    //! pointer to the index of some further predecessor of this block
     CBlockIndex* pskip{nullptr};
 
     //! height of the entry in the chain. The genesis block has height 0
@@ -182,6 +185,14 @@ public:
     uint32_t nBits{0};
     uint32_t nNonce{0};
 
+    // block signature - proof-of-stake protect the block by signing the block using a stake holder private key
+    std::vector<unsigned char> vchBlockSig{nullptr};
+    uint256 nStakeModifier{};
+    // proof-of-stake specific fields
+    COutPoint prevoutStake{nullptr};
+    uint256 hashProof{}; 
+    uint64_t nMoneySupply{0};
+
     //! (memory only) Sequential id assigned to distinguish order in which blocks are received.
     int32_t nSequenceId{0};
 
@@ -198,6 +209,11 @@ public:
           nTime{block.nTime},
           nBits{block.nBits},
           nNonce{block.nNonce}
+          nMoneySupply   = {block.nMoneySupply};
+          nStakeModifier = {block.nStakeModifier};
+          hashProof = {block.hashProof}; 
+          prevoutStake   = {block.prevoutStake}; 
+          vchBlockSig    = {block.vchBlockSig}; 
     {
     }
 
@@ -229,6 +245,8 @@ public:
         block.nTime          = nTime;
         block.nBits          = nBits;
         block.nNonce         = nNonce;
+        block.vchBlockSig    = vchBlockSig;
+        block.prevoutStake   = prevoutStake;
         return block;
     }
 
@@ -274,8 +292,8 @@ public:
 
     std::string ToString() const
     {
-        return strprintf("CBlockIndex(pprev=%p, nHeight=%d, merkle=%s, hashBlock=%s)",
-            pprev, nHeight,
+        return strprintf("CBlockIndex(pprev=%p, nHeight=%d, moneysupply=%d, type=%s, nStakeModifier=%x, merkle=%s, hashBlock=%s)",
+            pprev, nHeight, nMoneySupply, IsProofOfStake() ? "PoS" : "PoW", nStakeModifier.ToString(),
             hashMerkleRoot.ToString(),
             GetBlockHash().ToString());
     }
@@ -350,6 +368,7 @@ public:
         if (nStatus & BLOCK_HAVE_UNDO)
             READWRITE(VARINT(nUndoPos));
 
+        READWRITE(VARINT(nMoneySupply));
         // block header
         READWRITE(this->nVersion);
         READWRITE(hashPrev);
@@ -357,7 +376,11 @@ public:
         READWRITE(nTime);
         READWRITE(nBits);
         READWRITE(nNonce);
-    }
+        READWRITE(nStakeModifier);
+        READWRITE(prevoutStake);
+        READWRITE(hashProof);
+        READWRITE(vchBlockSig);
+   }
 
     uint256 GetBlockHash() const
     {
@@ -368,6 +391,8 @@ public:
         block.nTime           = nTime;
         block.nBits           = nBits;
         block.nNonce          = nNonce;
+        block.vchBlockSig     = vchBlockSig;
+        block.prevoutStake    = prevoutStake;
         return block.GetHash();
     }
 

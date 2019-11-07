@@ -87,6 +87,17 @@ void StartWallets(CScheduler& scheduler)
         pwallet->postInitProcess();
     }
 
+    // Mine proof-of-stake blocks in the background
+    if (!gArgs.GetBoolArg("-staking", DEFAULT_STAKE)) {
+        LogPrintf("Staking disabled\n");
+    }
+    else {
+        
+        for (const std::shared_ptr<CWallet>& pwallet : GetWallets()) {
+            pwallet->StartStake();
+        }
+    }
+
     // Schedule periodic wallet flushes and tx rebroadcasts
     scheduler.scheduleEvery(MaybeCompactWalletDB, 500);
     scheduler.scheduleEvery(MaybeResendWalletTxs, 1000);
@@ -95,6 +106,7 @@ void StartWallets(CScheduler& scheduler)
 void FlushWallets()
 {
     for (const std::shared_ptr<CWallet>& pwallet : GetWallets()) {
+        pwallet->StopStake();
         pwallet->Flush(false);
     }
 }
