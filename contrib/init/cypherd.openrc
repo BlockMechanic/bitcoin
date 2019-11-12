@@ -1,0 +1,92 @@
+#!/sbin/openrc-run
+
+# backward compatibility for existing gentoo layout 
+#
+if [ -d "/var/lib/cypher/.cypher" ]; then
+	CYPHERD_DEFAULT_DATADIR="/var/lib/cypher/.cypher"
+else
+	CYPHERD_DEFAULT_DATADIR="/var/lib/cypherd"
+fi
+
+CYPHERD_CONFIGFILE=${CYPHERD_CONFIGFILE:-/etc/cypher/cypher.conf}
+CYPHERD_PIDDIR=${CYPHERD_PIDDIR:-/var/run/cypherd}
+CYPHERD_PIDFILE=${CYPHERD_PIDFILE:-${CYPHERD_PIDDIR}/cypherd.pid}
+CYPHERD_DATADIR=${CYPHERD_DATADIR:-${CYPHERD_DEFAULT_DATADIR}}
+CYPHERD_USER=${CYPHERD_USER:-${CYPHER_USER:-cypher}}
+CYPHERD_GROUP=${CYPHERD_GROUP:-cypher}
+CYPHERD_BIN=${CYPHERD_BIN:-/usr/bin/cypherd}
+CYPHERD_NICE=${CYPHERD_NICE:-${NICELEVEL:-0}}
+CYPHERD_OPTS="${CYPHERD_OPTS:-${CYPHER_OPTS}}"
+
+name="Cypher Core Daemon"
+description="Cypher cryptocurrency P2P network daemon"
+
+command="/usr/bin/cypherd"
+command_args="-pid=\"${CYPHERD_PIDFILE}\" \
+		-conf=\"${CYPHERD_CONFIGFILE}\" \
+		-datadir=\"${CYPHERD_DATADIR}\" \
+		-daemon \
+		${CYPHERD_OPTS}"
+
+required_files="${CYPHERD_CONFIGFILE}"
+start_stop_daemon_args="-u ${CYPHERD_USER} \
+			-N ${CYPHERD_NICE} -w 2000"
+pidfile="${CYPHERD_PIDFILE}"
+
+# The retry schedule to use when stopping the daemon. Could be either
+# a timeout in seconds or multiple signal/timeout pairs (like
+# "SIGKILL/180 SIGTERM/300")
+retry="${CYPHERD_SIGTERM_TIMEOUT}"
+
+depend() {
+	need localmount net
+}
+
+# verify
+# 1) that the datadir exists and is writable (or create it)
+# 2) that a directory for the pid exists and is writable
+# 3) ownership and permissions on the config file
+start_pre() {
+	checkpath \
+	-d \
+	--mode 0750 \
+	--owner "${CYPHERD_USER}:${CYPHERD_GROUP}" \
+	"${CYPHERD_DATADIR}"
+
+	checkpath \
+	-d \
+	--mode 0755 \
+	--owner "${CYPHERD_USER}:${CYPHERD_GROUP}" \
+	"${CYPHERD_PIDDIR}"
+
+	checkpath -f \
+	-o ${CYPHERD_USER}:${CYPHERD_GROUP} \
+	-m 0660 \
+	${CYPHERD_CONFIGFILE}
+
+	checkconfig || return 1
+}
+
+checkconfig()
+{
+	if ! grep -qs '^rpcpassword=' "${CYPHERD_CONFIGFILE}" ; then
+		eerror ""
+		eerror "ERROR: You must set a secure rpcpassword to run cypherd."
+		eerror "The setting must appear in ${CYPHERD_CONFIGFILE}"
+		eerror ""
+		eerror "This password is security critical to securing wallets "
+		eerror "and must not be the same as the rpcuser setting."
+		eerror "You can generate a suitable random password using the following "
+		eerror "command from the shell:"
+		eerror ""
+		eerror "bash -c 'tr -dc a-zA-Z0-9 < /dev/urandom | head -c32 && echo'"
+		eerror ""
+		eerror "It is recommended that you also set alertnotify so you are "
+		eerror "notified of problems:"
+		eerror ""
+		eerror "ie: alertnotify=echo %%s | mail -s \"Cypher Alert\"" \
+			"admin@foo.com"
+		eerror ""
+		return 1
+	fi
+}

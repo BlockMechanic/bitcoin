@@ -1,9 +1,9 @@
-// Copyright (c) 2017-2018 The Bitcoin Core developers
+// Copyright (c) 2017-2018 The Cypher Core developers
 // Distributed under the MIT software license, see the accompanying
 // file COPYING or http://www.opensource.org/licenses/mit-license.php.
 
-#ifndef BITCOIN_INDEX_BASE_H
-#define BITCOIN_INDEX_BASE_H
+#ifndef CYPHER_INDEX_BASE_H
+#define CYPHER_INDEX_BASE_H
 
 #include <dbwrapper.h>
 #include <primitives/block.h>
@@ -109,4 +109,4 @@ public:
     void Stop();
 };
 
-#endif // BITCOIN_INDEX_BASE_H
+#endif // CYPHER_INDEX_BASE_H

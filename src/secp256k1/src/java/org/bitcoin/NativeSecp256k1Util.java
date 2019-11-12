@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 
-package org.bitcoin;
+package org.cypher;
 
 public class NativeSecp256k1Util{
 

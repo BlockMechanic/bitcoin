@@ -1,9 +1,9 @@
-// Copyright (c) 2019 The Bitcoin Core developers
+// Copyright (c) 2019 The Cypher Core developers
 // Distributed under the MIT software license, see the accompanying
 // file COPYING or http://www.opensource.org/licenses/mit-license.php.
 
-#ifndef BITCOIN_QT_CREATEWALLETDIALOG_H
-#define BITCOIN_QT_CREATEWALLETDIALOG_H
+#ifndef CYPHER_QT_CREATEWALLETDIALOG_H
+#define CYPHER_QT_CREATEWALLETDIALOG_H
 
 #include <QDialog>
 
@@ -32,4 +32,4 @@ private:
     Ui::CreateWalletDialog *ui;
 };
 
-#endif // BITCOIN_QT_CREATEWALLETDIALOG_H
+#endif // CYPHER_QT_CREATEWALLETDIALOG_H
