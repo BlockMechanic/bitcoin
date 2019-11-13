@@ -5295,7 +5295,7 @@ bool CWallet::CreateCoinStake(unsigned int nBits, const CAmount& nTotalFees, uin
     // Calculate reward
     CAmount devsubsidy = 0;
     {
-        int64_t nReward = nCredit * 0.001; // GetBlockSubsidy(*locked_chain->getHeight() + 1, consensusParams);
+        int64_t nReward = GetBlockSubsidy(*locked_chain->getHeight() + 1, consensusParams);
         if (nReward < 0)
             return false;
 
