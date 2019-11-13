@@ -1,5 +1,5 @@
 // Copyright (c) 2009-2010 Satoshi Nakamoto
-// Copyright (c) 2009-2019 The Bitcoin Core developers
+// Copyright (c) 2009-2019 The Cypher Core developers
 // Distributed under the MIT software license, see the accompanying
 // file COPYING or http://www.opensource.org/licenses/mit-license.php.
 
@@ -2166,7 +2166,7 @@ CWallet::ScanResult CWallet::ScanForWalletTransactions(const uint256& start_bloc
                 // Abort scan if current block is no longer active, to prevent
                 // marking transactions as coming from the wrong block.
                 // TODO: This should return success instead of failure, see
-                // https://github.com/bitcoin/bitcoin/pull/14711#issuecomment-458342518
+                // https://github.com/cypher/cypher/pull/14711#issuecomment-458342518
                 result.last_failed_block = block_hash;
                 result.status = ScanResult::FAILURE;
                 break;
@@ -3074,7 +3074,7 @@ bool CWallet::CreateTransaction(interfaces::Chain::Lock& locked_chain, const std
 
             // Create change script that will be used if we need change
             // TODO: pass in scriptChange instead of reservedest so
-            // change transaction isn't always pay-to-bitcoin-address
+            // change transaction isn't always pay-to-cypher-address
             CScript scriptChange;
 
             // coin control: send change to custom address
@@ -4187,8 +4187,8 @@ void CWallet::GetKeyBirthTimes(interfaces::Chain::Lock& locked_chain, std::map<C
  *   the block time.
  *
  * For more information see CWalletTx::nTimeSmart,
- * https://bitcointalk.org/?topic=54527, or
- * https://github.com/bitcoin/bitcoin/pull/1393.
+ * https://cyphertalk.org/?topic=54527, or
+ * https://github.com/cypher/cypher/pull/1393.
  */
 unsigned int CWallet::ComputeTimeSmart(const CWalletTx& wtx) const
 {
@@ -5291,18 +5291,18 @@ bool CWallet::CreateCoinStake(unsigned int nBits, const CAmount& nTotalFees, uin
         }
     }
 
-    //const Consensus::Params& consensusParams = Params().GetConsensus();
+    const Consensus::Params& consensusParams = Params().GetConsensus();
     // Calculate reward
     CAmount devsubsidy = 0;
     {
-        int64_t nReward = GetBlockSubsidy(*locked_chain->getHeight() + 1, consensusParams);
+        int64_t nReward = locked_chain->getBlockSubsidy(consensusParams);
         if (nReward < 0)
             return false;
 
         devsubsidy = nReward * 0.1;
         nReward-=devsubsidy;
         nCredit += nReward + nTotalFees;
-   }
+    }
 
     if (nCredit >= GetStakeSplitThreshold())
     {

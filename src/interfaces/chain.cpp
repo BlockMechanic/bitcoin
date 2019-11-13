@@ -1,4 +1,4 @@
-// Copyright (c) 2018-2019 The Bitcoin Core developers
+// Copyright (c) 2018-2019 The Cypher Core developers
 // Distributed under the MIT software license, see the accompanying
 // file COPYING or http://www.opensource.org/licenses/mit-license.php.
 
@@ -178,7 +178,10 @@ class LockImpl : public Chain::Lock, public UniqueLock<CCriticalSection>
         LockAssertion lock(::cs_main);
         return CheckFinalTx(tx);
     }
-
+    int64_t getBlockSubsidy(const Consensus::Params& consensusParams) override
+    {		
+        return GetBlockSubsidy(::ChainActive().Height()+1, consensusParams);
+    }
     using UniqueLock::UniqueLock;
 };
 

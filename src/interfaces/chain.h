@@ -139,6 +139,8 @@ public:
 
         //! Check if transaction will be final given chain height current time.
         virtual bool checkFinalTx(const CTransaction& tx) = 0;
+
+        virtual int64_t getBlockSubsidy(const Consensus::Params& consensusParams) = 0;
     };
 
     //! Return Lock interface. Chain is locked when this is called, and
@@ -278,6 +280,7 @@ public:
     //! to be prepared to handle this by ignoring notifications about unknown
     //! removed transactions and already added new transactions.
     virtual void requestMempoolTransactions(Notifications& notifications) = 0;
+    
 };
 
 //! Interface to let node manage chain clients (wallets, or maybe tools for
