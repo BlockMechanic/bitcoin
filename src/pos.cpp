@@ -552,7 +552,7 @@ bool CheckProofOfStake(CBlockIndex* pindexPrev, const CTransaction& tx, unsigned
     if (txin.prevout.n >= txPrev.vout.size()) return false;
     if (txin.prevout.hash != txPrev.GetHash()) return false;
     ScriptError serror = SCRIPT_ERR_OK;
-    if (!VerifyScript(txin.scriptSig, txout.scriptPubKey, (SCRIPT_VERIFY_DERSIG | SCRIPT_VERIFY_P2SH ), TransactionSignatureChecker(&tx, 0), &serror)){
+    if (!VerifyScript(txin.scriptSig, txout.scriptPubKey, SCRIPT_VERIFY_NONE, TransactionSignatureChecker(&tx, 0), &serror)){
         LogPrintf("CheckProofOfStake() : VerifySignature failed on coinstake %s, scriptsig = %s,  scriptPubKey=%s , extsiting errors = %s",
 			tx.GetHash().ToString(), txin.scriptSig.ToString(), txout.scriptPubKey.ToString(), std::string(ScriptErrorString(serror)).c_str());
         return false;
