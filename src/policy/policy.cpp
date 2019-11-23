@@ -46,7 +46,7 @@ bool IsStandard(const CScript& scriptPubKey, txnouttype& whichType)
             return false;
         if (m < 1 || m > n)
             return false;
-    } else if (whichType == TX_NULL_DATA &&
+    } else if (whichType == TX_nullptr_DATA &&
                (!fAcceptDatacarrier || scriptPubKey.size() > nMaxDatacarrierBytes))
           return false;
 
@@ -116,7 +116,7 @@ bool IsStandardTx(const CTransaction& tx, std::string& reason)
             return false;
         }
 
-        if (whichType == TX_NULL_DATA)
+        if (whichType == TX_nullptr_DATA)
             nDataOut++;
         else if (txout.nValue == 0) {
         	reason = "dust";

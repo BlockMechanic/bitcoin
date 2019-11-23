@@ -36,9 +36,9 @@ double GetDifficulty(const CBlockIndex* blockindex)
 {
     // Floating point number that is a multiple of the minimum difficulty,
     // minimum difficulty = 1.0.
-    if (blockindex == NULL)
+    if (blockindex == nullptr)
     {
-        if (chainActive.Tip() == NULL)
+        if (chainActive.Tip() == nullptr)
             return 1.0;
         else
         	blockindex = GetLastBlockIndex(chainActive.Tip(), false);
@@ -70,7 +70,7 @@ double GetPoSKernelPS()
     int nStakesHandled = 0, nStakesTime = 0;
 
     CBlockIndex* pindex = chainActive.Tip();;
-    CBlockIndex* pindexPrevStake = NULL;
+    CBlockIndex* pindexPrevStake = nullptr;
 
     while (pindex && nStakesHandled < nPoSInterval)
     {
@@ -879,7 +879,7 @@ static UniValue SoftForkMajorityDesc(int minVersion, CBlockIndex* pindex, int nR
 {
     int nFound = 0;
     CBlockIndex* pstart = pindex;
-    for (int i = 0; i < consensusParams.nMajorityWindow && pstart != NULL; i++)
+    for (int i = 0; i < consensusParams.nMajorityWindow && pstart != nullptr; i++)
     {
         if (pstart->nVersion >= minVersion)
             ++nFound;

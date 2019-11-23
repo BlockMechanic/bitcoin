@@ -114,7 +114,7 @@ unsigned int static KimotoGravityWell(const CBlockIndex* pindexLast, const Conse
     uint64_t PastBlocksMax = PastSecondsMax / nTargetSpacing;
 	const arith_uint256 bnPowLimit = UintToArith256(params.powLimit);
 	
-	if (BlockLastSolved == NULL || BlockLastSolved->nHeight == 0 || (uint64_t)BlockLastSolved->nHeight < PastBlocksMin) { return bnPowLimit.GetCompact(); }
+	if (BlockLastSolved == nullptr || BlockLastSolved->nHeight == 0 || (uint64_t)BlockLastSolved->nHeight < PastBlocksMin) { return bnPowLimit.GetCompact(); }
 
     int64_t LatestBlockTime = BlockLastSolved->GetBlockTime();
 
@@ -167,7 +167,7 @@ unsigned int static KimotoGravityWell(const CBlockIndex* pindexLast, const Conse
                 break;
             }
         }
-        if (BlockReading->pprev == NULL) {
+        if (BlockReading->pprev == nullptr) {
             assert(BlockReading);
             break;
         }
@@ -311,7 +311,7 @@ unsigned int CalculateNextTargetRequired(const CBlockIndex* pindexLast, int64_t 
 unsigned int GetNextTargetRequired(const CBlockIndex* pindexLast, const CBlockHeader *pblock, const Consensus::Params& params, bool fProofOfStake)
 {
     // Genesis block
-    if (pindexLast == NULL)
+    if (pindexLast == nullptr)
         return UintToArith256(params.powLimit).GetCompact();
 
     /*
@@ -319,10 +319,10 @@ unsigned int GetNextTargetRequired(const CBlockIndex* pindexLast, const CBlockHe
 
     const CBlockIndex* pindexPrev = GetLastBlockIndex(pindexLast, fProofOfStake);
 
-    if (pindexPrev->pprev == NULL)
+    if (pindexPrev->pprev == nullptr)
         return nTargetLimit; // first block
     const CBlockIndex* pindexPrevPrev = GetLastBlockIndex(pindexPrev->pprev, fProofOfStake);
-    if (pindexPrevPrev->pprev == NULL)
+    if (pindexPrevPrev->pprev == nullptr)
         return nTargetLimit; // second block
     */
 

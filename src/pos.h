@@ -30,7 +30,7 @@ uint256 ComputeStakeModifierV2(const CBlockIndex* pindexPrev, const uint256& ker
 // Get time weight using supplied timestamps
 int64_t GetCoinAgeWeight(int64_t nIntervalBeginning, int64_t nIntervalEnd);
 // Get transaction coin age
-bool TransactionGetCoinAge(CTransaction& transaction, uint64_t& nCoinAge);
+bool GetCoinAge(CTransaction& tx, uint64_t& nCoinAge);
 
 // Check whether the coinstake timestamp meets protocol
 bool CheckCoinStakeTimestamp(int64_t nTimeBlock, int64_t nTimeTx);
@@ -40,7 +40,7 @@ bool CheckKernel(CBlockIndex* pindexPrev, unsigned int nBits, uint32_t nTime, co
 
 // Check whether stake kernel meets hash target
 // Sets hashProofOfStake on success return
-bool CheckStakeKernelHash(const CBlockIndex* pindexPrev, unsigned int nBits,const CBlock& blockFrom, unsigned int nTxPrevOffset, const CTransaction& txPrev, const COutPoint& prevout, unsigned int nTimeTx, uint256& hashProofOfStake, bool fPrintProofOfStake = false);
+bool CheckStakeKernelHash(CBlockIndex* pindexPrev, unsigned int nBits,const CBlock& blockFrom, const CTransaction& txPrev, const COutPoint& prevout, unsigned int nTimeTx, uint256& hashProofOfStake, bool fPrintProofOfStake = false);
 
 // Check kernel hash target and coinstake signature
 // Sets hashProofOfStake on success return

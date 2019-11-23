@@ -52,25 +52,25 @@ inline T* NCONST_PTR(const T* val)
 template <typename V>
 inline typename V::value_type* begin_ptr(V& v)
 {
-    return v.empty() ? NULL : &v[0];
+    return v.empty() ? nullptr : &v[0];
 }
 /** Get begin pointer of vector (const version) */
 template <typename V>
 inline const typename V::value_type* begin_ptr(const V& v)
 {
-    return v.empty() ? NULL : &v[0];
+    return v.empty() ? nullptr : &v[0];
 }
 /** Get end pointer of vector (non-const version) */
 template <typename V>
 inline typename V::value_type* end_ptr(V& v)
 {
-    return v.empty() ? NULL : (&v[0] + v.size());
+    return v.empty() ? nullptr : (&v[0] + v.size());
 }
 /** Get end pointer of vector (const version) */
 template <typename V>
 inline const typename V::value_type* end_ptr(const V& v)
 {
-    return v.empty() ? NULL : (&v[0] + v.size());
+    return v.empty() ? nullptr : (&v[0] + v.size());
 }
 
 /*
@@ -294,7 +294,6 @@ uint64_t ReadCompactSize(Stream& is)
     }
     else
     {
-        // note to lateminer :- this is the specific error being thrown
         nSizeRet = ser_readdata64(is);
         if (nSizeRet < 0x100000000ULL)
             throw std::ios_base::failure("non-canonical ReadCompactSize()");
